@@ -25,6 +25,7 @@ import io.github.electroheavenvn.zaloxposed.hooks.functional.*;
 import io.github.electroheavenvn.zaloxposed.hooks.functional.minichat.*;
 import io.github.electroheavenvn.zaloxposed.hooks.microg.MicroGHook;
 import io.github.electroheavenvn.zaloxposed.hooks.morphe.*;
+import io.github.electroheavenvn.zaloxposed.hooks.nativehook.NativeHook;
 import io.github.electroheavenvn.zaloxposed.hooks.privacy.*;
 import io.github.electroheavenvn.zaloxposed.hooks.permanent.*;
 import io.github.electroheavenvn.zaloxposed.hooks.tracking.*;
@@ -125,7 +126,7 @@ public class ZaloXposedLoader extends XposedModule
                     int layoutId = modRes.getIdentifier(name, "layout", modulePkg);
                     if (layoutId == 0)
                     {
-                        System.exit(1);
+                        Logger.e("Custom splash layout not found: " + name);
                         return result;
                     }
                     Context modContext = new ContextThemeWrapper(activity, 0)
