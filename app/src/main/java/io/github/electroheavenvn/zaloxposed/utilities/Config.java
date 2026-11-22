@@ -302,6 +302,14 @@ public final class Config
     public static boolean getEnableLiquidGlassTabBar() { return (boolean)get(KEY_ENABLE_LIQUID_GLASS_TABBAR, false); }
     public static void setEnableLiquidGlassTabBar(boolean value) { set(KEY_ENABLE_LIQUID_GLASS_TABBAR, value); }
 
+    public static final String KEY_ENABLE_CUSTOM_APP_ICON = "enable_custom_app_icon";
+    public static boolean getEnableCustomAppIcon() { return (boolean)get(KEY_ENABLE_CUSTOM_APP_ICON, false); }
+    public static void setEnableCustomAppIcon(boolean value) { set(KEY_ENABLE_CUSTOM_APP_ICON, value); }
+
+    public static final String KEY_HIDE_WELCOME_DIALOG = "hide_welcome_dialog";
+    public static boolean getHideWelcomeDialog() { return (boolean)get(KEY_HIDE_WELCOME_DIALOG, false); }
+    public static void setHideWelcomeDialog(boolean value) { set(KEY_HIDE_WELCOME_DIALOG, value); }
+
     public static final String KEY_ENABLE_ANTI_RECALL = "enable_anti_recall";
     public static boolean getEnableAntiRecall() { return (boolean)get(KEY_ENABLE_ANTI_RECALL, false); }
     public static void setEnableAntiRecall(boolean value) { set(KEY_ENABLE_ANTI_RECALL, value); }
