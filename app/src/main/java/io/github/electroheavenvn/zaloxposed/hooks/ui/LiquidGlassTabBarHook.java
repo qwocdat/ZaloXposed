@@ -175,7 +175,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             Logger.e(t);
         }
 
-        // Hook CustomMainTab.onMeasure & setVisibility to keep Zalo's original TabBar at 0px & hidden
+        // Hook CustomMainTab.onMeasure & setVisibility ONLY AFTER our custom TabBar is attached
         try
         {
             Class<?> customMainTabCls = Class.forName("com.zing.zalo.ui.maintab.widget.CustomMainTab", false, classLoader);
@@ -185,7 +185,7 @@ public class LiquidGlassTabBarHook extends BaseHook
                 doHook(setVis, 10, chain ->
                 {
                     Object self = chain.getThisObject();
-                    if (Config.getEnableLiquidGlassTabBar() && customMainTabCls.isInstance(self))
+                    if (Config.getEnableLiquidGlassTabBar() && !ATTACHED.isEmpty() && customMainTabCls.isInstance(self))
                         return chain.proceed(new Object[] { View.GONE });
                     return chain.proceed();
                 });
@@ -197,7 +197,7 @@ public class LiquidGlassTabBarHook extends BaseHook
                 Method onMeasureTab = customMainTabCls.getDeclaredMethod("onMeasure", int.class, int.class);
                 doHook(onMeasureTab, 10, chain ->
                 {
-                    if (Config.getEnableLiquidGlassTabBar())
+                    if (Config.getEnableLiquidGlassTabBar() && !ATTACHED.isEmpty())
                     {
                         int zeroSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.EXACTLY);
                         return chain.proceed(new Object[] { zeroSpec, zeroSpec });
@@ -323,7 +323,7 @@ public class LiquidGlassTabBarHook extends BaseHook
         if (CUSTOM_TABBAR_TAG.equals(node.getTag()))
             return;
 
-        if (node != root && isLikelyTabBar(node, root, rootW, rootH, minH, maxH))
+        if (node != root && (node.getClass().getName().contains("CustomMainTab") || isLikelyTabBar(node, root, rootW, rootH, minH, maxH)))
             out.add(node);
 
         int count = node.getChildCount();
