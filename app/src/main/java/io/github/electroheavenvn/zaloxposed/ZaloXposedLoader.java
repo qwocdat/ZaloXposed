@@ -147,26 +147,6 @@ public class ZaloXposedLoader extends XposedModule
                     customSplash = inflater.inflate(layoutId, null, false);
                     if (customSplash == null)
                         return result;
-                    try
-                    {
-                        android.graphics.Bitmap customLogo = CustomAppIconHook.loadCustomIconBitmap();
-                        if (customLogo != null && customSplash instanceof ViewGroup splashGroup)
-                        {
-                            for (int i = 0; i < splashGroup.getChildCount(); i++)
-                            {
-                                View child = splashGroup.getChildAt(i);
-                                if (child instanceof android.widget.ImageView iv)
-                                {
-                                    int iconPx = Math.round(112f * activity.getResources().getDisplayMetrics().density);
-                                    ViewGroup.LayoutParams ivLp = iv.getLayoutParams();
-                                    if (ivLp != null) { ivLp.width = iconPx; ivLp.height = iconPx; iv.setLayoutParams(ivLp); }
-                                    iv.setImageBitmap(customLogo);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    catch (Throwable ignored) { }
                     View decor = activity.getWindow() != null ? activity.getWindow()
                         .getDecorView() : null;
                     if (!(decor instanceof ViewGroup))

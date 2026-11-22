@@ -120,21 +120,10 @@ public final class S
         trans.put("showMoreTabTitle", new String[] { "Show More tab", "Hiện tab Thêm" });
         trans.put("liquidGlassTabBarTitle", new String[] { "TabBar Liquid Glass", "TabBar Liquid Glass" });
         trans.put("liquidGlassTabBarDesc", new String[] { "Floating rounded Liquid Glass TabBar with interactive sliding droplet effect", "Thanh TabBar nổi bo tròn Liquid Glass kèm hiệu ứng giọt kính trượt tương tác" });
-        trans.put("customAppIconSubCategoryTitle", new String[] { "Custom app icon", "Icon ứng dụng tùy chỉnh" });
-        trans.put("customAppIconEnableTitle", new String[] { "Enable custom app icon", "Bật đổi icon ứng dụng tùy chỉnh" });
-        trans.put("customAppIconEnableDesc", new String[] { "Applies custom logo on splash & recents after restart", "Áp dụng logo tùy chỉnh cho màn hình khởi động & đa nhiệm sau khi khởi động lại" });
-        trans.put("customAppIconPickTitle", new String[] { "Upload & crop app icon", "Tải ảnh & cắt (Crop) icon app" });
-        trans.put("customAppIconPickDesc", new String[] { "Pick an image and align/zoom inside the icon frame", "Chọn ảnh từ máy và căn chỉnh, phóng to/thu nhỏ trong khung icon" });
-        trans.put("customAppIconPinTitle", new String[] { "Add custom icon to Home Screen", "Ghim icon tùy chỉnh ra màn hình chính" });
-        trans.put("customAppIconPinDesc", new String[] { "Creates a home-screen launcher icon with your cropped logo", "Tạo biểu tượng Zalo với logo mới ngay ngoài màn hình chính" });
-        trans.put("customAppIconResetTitle", new String[] { "Reset default app icon", "Khôi phục icon mặc định" });
-        trans.put("customAppIconCropTitle", new String[] { "Crop App Icon", "Căn chỉnh & Cắt Icon App" });
-        trans.put("customAppIconCropHint", new String[] { "Drag to move, pinch with 2 fingers to zoom", "Kéo để di chuyển, chụm 2 ngón tay để phóng to/thu nhỏ" });
-        trans.put("customAppIconSaveBtn", new String[] { "Save icon", "Lưu icon" });
-        trans.put("customAppIconSaved", new String[] { "Custom icon saved! Restart app to apply.", "Đã lưu icon tùy chỉnh! Khởi động lại app để áp dụng." });
-        trans.put("customAppIconMissing", new String[] { "Please upload and crop a custom icon first.", "Vui lòng tải ảnh và cắt icon trước." });
-        trans.put("customAppIconPinUnsupported", new String[] { "Your launcher does not allow pinned shortcuts.", "Launcher không hỗ trợ ghim icon trực tiếp." });
-        trans.put("customAppIconResetDone", new String[] { "Reset to default icon. Restart app to apply.", "Đã khôi phục icon mặc định. Khởi động lại app để áp dụng." });
+        trans.put("liquidGlassThemeTitle", new String[] { "Liquid Glass theme", "Giao diện Liquid Glass (Sáng / Tối)" });
+        trans.put("liquidGlassThemeDesc", new String[] { "Choose Light (white & blue) or Dark (charcoal glass)", "Chọn nền Sáng (trắng xanh) hoặc Tối (kính tối)" });
+        trans.put("liquidGlassThemeLight", new String[] { "Light", "Sáng" });
+        trans.put("liquidGlassThemeDark", new String[] { "Dark", "Tối" });
 
         // Profile
         trans.put("profileSubCategoryTitle", new String[] { "Profile", "Hồ sơ" });

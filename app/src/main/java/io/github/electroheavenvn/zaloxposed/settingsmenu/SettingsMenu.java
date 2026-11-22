@@ -15,7 +15,6 @@ import io.github.electroheavenvn.zaloxposed.hooks.custommenu.ZButtonHelper;
 import io.github.electroheavenvn.zaloxposed.hooks.functional.ConfigImportExportHook;
 import io.github.electroheavenvn.zaloxposed.hooks.functional.CustomCallRingtoneHook;
 import io.github.electroheavenvn.zaloxposed.hooks.ui.CustomBackgroundHook;
-import io.github.electroheavenvn.zaloxposed.hooks.ui.CustomAppIconHook;
 import io.github.electroheavenvn.zaloxposed.utilities.Config;
 import io.github.electroheavenvn.zaloxposed.utilities.DexKitCache;
 import io.github.electroheavenvn.zaloxposed.utilities.S;
@@ -140,16 +139,11 @@ public final class SettingsMenu
                 new SwitchSettingFeature("hideNewsfeedTabTitle", "", Config.KEY_HIDE_NEWS_FEED_TAB),
                 new SwitchSettingFeature("showGroupsTabTitle", "", Config.KEY_SHOW_GROUPS_TAB),
                 new SwitchSettingFeature("showMoreTabTitle", "", Config.KEY_SHOW_MORE_TAB),
-                new SwitchSettingFeature("liquidGlassTabBarTitle", "liquidGlassTabBarDesc", Config.KEY_ENABLE_LIQUID_GLASS_TABBAR)
-            )),
-            new SettingSubCategory("customAppIconSubCategoryTitle", List.of(
-                new SwitchSettingFeature("customAppIconEnableTitle", "customAppIconEnableDesc", Config.KEY_ENABLE_CUSTOM_APP_ICON),
-                new OptionSettingFeature("customAppIconPickTitle", "customAppIconPickDesc", (item, context) ->
-                    CustomAppIconHook.PickAndCropIcon(context)),
-                new OptionSettingFeature("customAppIconPinTitle", "customAppIconPinDesc", (item, context) ->
-                    CustomAppIconHook.PinCustomShortcut(context)),
-                new OptionSettingFeature("customAppIconResetTitle", "", (item, context) ->
-                    CustomAppIconHook.ResetCustomIcon(context))
+                new SwitchSettingFeature("liquidGlassTabBarTitle", "liquidGlassTabBarDesc", Config.KEY_ENABLE_LIQUID_GLASS_TABBAR),
+                new ListSelectionSettingFeature("liquidGlassThemeTitle", "liquidGlassThemeDesc", Config.KEY_LIQUID_GLASS_THEME, List.of(
+                    new ListSelectionSettingFeature.Selection("liquidGlassThemeLight", 0),
+                    new ListSelectionSettingFeature.Selection("liquidGlassThemeDark", 1)
+                ))
             ))
         )));
         settingItems.add(new SettingCategory("profileCategoryTitle", "profileCategoryDesc", List.of(
