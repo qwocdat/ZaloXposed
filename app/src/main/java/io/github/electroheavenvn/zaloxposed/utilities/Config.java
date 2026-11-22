@@ -298,6 +298,10 @@ public final class Config
     public static boolean getShowGroupsTab() { return (boolean)get(KEY_SHOW_GROUPS_TAB, false); }
     public static void setShowGroupsTab(boolean value) { set(KEY_SHOW_GROUPS_TAB, value); }
 
+    public static final String KEY_ENABLE_LIQUID_GLASS_TABBAR = "enable_liquid_glass_tabbar";
+    public static boolean getEnableLiquidGlassTabBar() { return (boolean)get(KEY_ENABLE_LIQUID_GLASS_TABBAR, false); }
+    public static void setEnableLiquidGlassTabBar(boolean value) { set(KEY_ENABLE_LIQUID_GLASS_TABBAR, value); }
+
     public static final String KEY_ENABLE_ANTI_RECALL = "enable_anti_recall";
     public static boolean getEnableAntiRecall() { return (boolean)get(KEY_ENABLE_ANTI_RECALL, false); }
     public static void setEnableAntiRecall(boolean value) { set(KEY_ENABLE_ANTI_RECALL, value); }

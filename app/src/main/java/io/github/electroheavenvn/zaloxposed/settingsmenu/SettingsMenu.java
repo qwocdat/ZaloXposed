@@ -138,7 +138,8 @@ public final class SettingsMenu
                 new SwitchSettingFeature("hideDiscoveryTabTitle", "", Config.KEY_HIDE_DISCOVERY_TAB),
                 new SwitchSettingFeature("hideNewsfeedTabTitle", "", Config.KEY_HIDE_NEWS_FEED_TAB),
                 new SwitchSettingFeature("showGroupsTabTitle", "", Config.KEY_SHOW_GROUPS_TAB),
-                new SwitchSettingFeature("showMoreTabTitle", "", Config.KEY_SHOW_MORE_TAB)
+                new SwitchSettingFeature("showMoreTabTitle", "", Config.KEY_SHOW_MORE_TAB),
+                new SwitchSettingFeature("liquidGlassTabBarTitle", "liquidGlassTabBarDesc", Config.KEY_ENABLE_LIQUID_GLASS_TABBAR)
             ))
         )));
         settingItems.add(new SettingCategory("profileCategoryTitle", "profileCategoryDesc", List.of(

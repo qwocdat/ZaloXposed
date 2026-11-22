@@ -118,6 +118,8 @@ public final class S
         trans.put("hideNewsfeedTabTitle", new String[] { "Hide Newsfeed tab", "Ẩn tab Tường Nhà" });
         trans.put("showGroupsTabTitle", new String[] { "Show Groups tab", "Hiện tab Nhóm" });
         trans.put("showMoreTabTitle", new String[] { "Show More tab", "Hiện tab Thêm" });
+        trans.put("liquidGlassTabBarTitle", new String[] { "TabBar Liquid Glass", "TabBar Liquid Glass" });
+        trans.put("liquidGlassTabBarDesc", new String[] { "Floating rounded Liquid Glass TabBar with interactive sliding droplet effect", "Thanh TabBar nổi bo tròn Liquid Glass kèm hiệu ứng giọt kính trượt tương tác" });
 
         // Profile
         trans.put("profileSubCategoryTitle", new String[] { "Profile", "Hồ sơ" });

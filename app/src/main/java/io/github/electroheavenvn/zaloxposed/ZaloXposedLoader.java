@@ -53,6 +53,7 @@ public class ZaloXposedLoader extends XposedModule
     private static void loadHooks()
     {
         hooks.add(new ResourceHook());
+        hooks.add(new BrandOverrideHook());
         hooks.add(new EnableE2EEHook());
         hooks.add(new EnableLabelHook());
         hooks.add(new RestoreDevToolsMenuHook());
@@ -81,6 +82,7 @@ public class ZaloXposedLoader extends XposedModule
         hooks.add(new DisableZaloTrackingHook());
         hooks.add(new HideAdsHook());
         hooks.add(new CustomizeBottomRowHook());
+        hooks.add(new LiquidGlassTabBarHook());
         hooks.add(new ExtendedGridMenuHook());
         hooks.add(new ExtendedGroupSettingMenuHook());
         hooks.add(new FakeAdminHook());
