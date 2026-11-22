@@ -761,12 +761,28 @@ public class LiquidGlassTabBarHook extends BaseHook
             "  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;" +
             "}" +
             "float2 sdGrad(float2 p, float2 b, float r) {" +
-            "  float e = 0.75;" +
+            "  float e = 0.85;" +
             "  float gx = sdRoundBox(p + float2(e, 0.0), b, r) - sdRoundBox(p - float2(e, 0.0), b, r);" +
             "  float gy = sdRoundBox(p + float2(0.0, e), b, r) - sdRoundBox(p - float2(0.0, e), b, r);" +
             "  return normalize(float2(gx, gy) + float2(0.00001));" +
             "}" +
-            "half4 tintDarkInkBlue(half4 px, float isDarkMode) {" +
+            "float3 sampleGlassColor(float2 coord, float isDarkMode) {" +
+            "  half4 px = content.eval(coord);" +
+            "  float a = clamp(float(px.a), 0.0, 1.0);" +
+            "  float3 straight = (a > 0.004) ? (float3(px.rgb) / max(a, 0.004)) : float3(0.0);" +
+            "  float mx = max(straight.r, max(straight.g, straight.b));" +
+            "  float mn = min(straight.r, min(straight.g, straight.b));" +
+            "  float sat = (mx - mn) / max(mx, 0.001);" +
+            "  float luma = dot(straight, float3(0.299, 0.587, 0.114));" +
+            "  float inkLight = smoothstep(0.42, 0.14, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
+            "  float inkDark  = smoothstep(0.60, 0.88, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
+            "  float inkMask = mix(inkLight, inkDark, isDarkMode);" +
+            "  float3 activeBlue = mix(float3(0.0, 0.478, 1.0), float3(0.04, 0.52, 1.0), isDarkMode);" +
+            "  float3 tinted = mix(straight, activeBlue, inkMask);" +
+            "  float3 envCol = mix(float3(0.76, 0.80, 0.86), float3(0.01, 0.01, 0.015), isDarkMode);" +
+            "  return mix(envCol, tinted, a);" +
+            "}" +
+            "half4 tintRestInk(half4 px, float isDarkMode) {" +
             "  float a = float(px.a);" +
             "  if (a < 0.05) return px;" +
             "  float3 straight = float3(px.rgb) / max(a, 0.001);" +
@@ -775,11 +791,10 @@ public class LiquidGlassTabBarHook extends BaseHook
             "  float sat = (mx - mn) / max(mx, 0.001);" +
             "  float luma = dot(straight, float3(0.299, 0.587, 0.114));" +
             "  float inkLight = smoothstep(0.42, 0.14, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
-            "  float inkDark  = smoothstep(0.62, 0.88, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
+            "  float inkDark  = smoothstep(0.60, 0.88, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
             "  float inkMask = mix(inkLight, inkDark, isDarkMode);" +
             "  float3 activeBlue = mix(float3(0.0, 0.478, 1.0), float3(0.04, 0.52, 1.0), isDarkMode);" +
-            "  float3 outStraight = mix(straight, activeBlue, inkMask);" +
-            "  return half4(half3(outStraight * a), px.a);" +
+            "  return half4(half3(mix(straight, activeBlue, inkMask) * a), px.a);" +
             "}" +
             "half4 main(float2 fragCoord) {" +
             "  float2 center = (uRect.xy + uRect.zw) * 0.5;" +
@@ -788,36 +803,32 @@ public class LiquidGlassTabBarHook extends BaseHook
             "  float d = sdRoundBox(p, halfSize, uRadius);" +
             "  if (d > 0.8) return content.eval(fragCoord);" +
             "  float mask = 1.0 - smoothstep(-0.7, 0.7, d);" +
-            "  if (uInflate <= 0.015) {" +
-            "    half4 orig = content.eval(fragCoord);" +
-            "    half4 blue = tintDarkInkBlue(orig, uDark);" +
-            "    return mix(orig, blue, half(mask));" +
-            "  }" +
-            "  float bevelW = 14.5 * uDensity;" +
-            "  float u = clamp(-d / bevelW, 0.0, 1.0);" +
-            "  // Monotonic decay from outer wall (u=0 -> max) to flat center (u=1 -> 0)\n" +
-            "  float lensCurve = pow(1.0 - u, 2.1);" +
-            "  float2 grad = sdGrad(p, halfSize, uRadius);" +
-            "  float refractMag = lensCurve * (14.0 * uDensity) * uInflate;" +
-            "  half4 sR = tintDarkInkBlue(content.eval(fragCoord + grad * (refractMag * 0.76)), uDark);" +
-            "  half4 sG = tintDarkInkBlue(content.eval(fragCoord + grad * (refractMag * 1.00)), uDark);" +
-            "  half4 sB = tintDarkInkBlue(content.eval(fragCoord + grad * (refractMag * 1.28)), uDark);" +
-            "  half3 rgb = half3(sR.r, sG.g, sB.b);" +
-            "  float baseA = max(float(sG.a), max(float(sR.a), float(sB.a)) * 0.88);" +
-            "  // Real glass shell shading + Fresnel top/bottom specular rim (zero plastic opacity)\n" +
-            "  float2 uv = p / max(halfSize, float2(1.0));" +
-            "  float fresnel = pow(1.0 - u, 2.6) * uInflate;" +
-            "  float specTop = pow(max(0.0, -uv.y), 2.2) * fresnel;" +
-            "  float specBot = pow(max(0.0,  uv.y), 2.4) * fresnel;" +
-            "  float rimLine = (1.0 - smoothstep(0.0, 1.15 * uDensity, -d)) * uInflate;" +
-            "  // Dark mode uses subtle translucent charcoal glass over dark; Light mode uses airy clear glass\n" +
-            "  half3 shellTint = mix(half3(0.96, 0.98, 1.0), half3(0.24, 0.25, 0.28), half(uDark));" +
-            "  float shellA = clamp((0.08 + fresnel * 0.18 + rimLine * 0.42) * uInflate, 0.0, 0.90);" +
-            "  float outA = clamp(max(baseA, shellA), 0.0, 1.0);" +
-            "  half3 glassRgb = rgb + shellTint * half(max(0.0, shellA - baseA));" +
-            "  glassRgb += half3(1.0, 1.0, 1.0) * half(specTop * 0.36 + specBot * 0.24 + rimLine * 0.48);" +
-            "  half4 lensPx = half4(glassRgb, half(outA));" +
             "  half4 outsidePx = content.eval(fragCoord);" +
+            "  if (uInflate <= 0.015) {" +
+            "    return mix(outsidePx, tintRestInk(outsidePx, uDark), half(mask));" +
+            "  }" +
+            "  float bevelW = 17.5 * uDensity;" +
+            "  float u = clamp(-d / bevelW, 0.0, 1.0);" +
+            "  float lensCurve = pow(1.0 - u, 3.8);" +
+            "  float2 grad = sdGrad(p, halfSize, uRadius);" +
+            "  float refractMag = lensCurve * (16.5 * uDensity) * uInflate;" +
+            "  // Convex magnifying refraction (-grad) with 3-channel Cauchy RGB dispersion
+" +
+            "  float3 cR = sampleGlassColor(fragCoord - grad * (refractMag * 0.65), uDark);" +
+            "  float3 cG = sampleGlassColor(fragCoord - grad * (refractMag * 1.00), uDark);" +
+            "  float3 cB = sampleGlassColor(fragCoord - grad * (refractMag * 1.42), uDark);" +
+            "  float3 rgb = float3(cR.r, cG.g, cB.b);" +
+            "  // Ultra-thin physical Fresnel rim highlight (zero milky plastic fill)
+" +
+            "  float fresnel = pow(1.0 - u, 4.0) * uInflate;" +
+            "  float outerRim = (1.0 - smoothstep(0.0, 1.05 * uDensity, -d)) * uInflate;" +
+            "  float ny = p.y / max(halfSize.y, 1.0);" +
+            "  float topSheen = pow(max(0.0, -ny), 2.8) * fresnel;" +
+            "  float botSheen = pow(max(0.0,  ny), 2.8) * fresnel;" +
+            "  float spec = outerRim * mix(0.52, 0.34, uDark) + (topSheen * 0.20 + botSheen * 0.16);" +
+            "  float3 glassRgb = clamp(rgb + float3(spec), 0.0, 1.0);" +
+            "  float lensAlpha = clamp(mix(float(outsidePx.a), 0.96, uInflate), 0.0, 1.0);" +
+            "  half4 lensPx = half4(half3(glassRgb * lensAlpha), half(lensAlpha));" +
             "  return mix(outsidePx, lensPx, half(mask));" +
             "}";
 
@@ -958,43 +969,33 @@ public class LiquidGlassTabBarHook extends BaseHook
         {
             float capRadius = capsuleRect.height() * 0.5f;
 
-            // 1. Translucent Glass Capsule Background
-            // Light: bright frosted white; Dark: exact charcoal gradient from Image 2 (#34363A -> #202125)
-            int topGlass = dark ? 0xD834363A : 0xD4F8FAFE;
-            int botGlass = dark ? 0xD41F2024 : 0xC8EDF2FA;
-            capsuleFillPaint.setShadowLayer(dpf(12f), 0f, dpf(4f), dark ? 0x55000000 : 0x1A001433);
+            // 1. Translucent Glass Capsule Background (matching Liquid Clock charcoal / frosted white)
+            int topGlass = dark ? 0xEE36383C : 0xECF8FAFE;
+            int botGlass = dark ? 0xEA24262A : 0xE2EDF2FA;
+            capsuleFillPaint.setShadowLayer(dpf(12f), 0f, dpf(4f), dark ? 0x66000000 : 0x1A001433);
             capsuleFillPaint.setShader(new LinearGradient(
                 0f, capsuleRect.top, 0f, capsuleRect.bottom, topGlass, botGlass, Shader.TileMode.CLAMP));
             canvas.drawRoundRect(capsuleRect, capRadius, capRadius, capsuleFillPaint);
             capsuleFillPaint.setShader(null);
 
-            // 2. Pure WHITE Glow strictly clipped INSIDE the TabBar capsule background when touched/held
-            if (inflateProgress > 0.01f && !dropletRect.isEmpty())
-            {
-                canvas.save();
-                canvas.clipPath(capsuleClipPath);
-                float cx = dropletRect.centerX();
-                float cy = dropletRect.centerY();
-                float glowRadius = Math.max(dropletRect.width() * 0.95f, dpf(78f));
-                int peakWhite = Color.argb((int) ((dark ? 78 : 240) * inflateProgress), 255, 255, 255);
-                int midWhite = Color.argb((int) ((dark ? 32 : 130) * inflateProgress), 255, 255, 255);
-                innerWhiteGlowPaint.setShader(new RadialGradient(
-                    cx, cy, glowRadius,
-                    new int[] { peakWhite, midWhite, Color.TRANSPARENT },
-                    new float[] { 0.0f, 0.55f, 1.0f },
-                    Shader.TileMode.CLAMP));
-                canvas.drawRect(capsuleRect, innerWhiteGlowPaint);
-                innerWhiteGlowPaint.setShader(null);
-                canvas.restore();
-            }
+            // 2. Soft refractive edge rim (2.2dp soft + 1.0dp crisp) -> disperses into smooth rainbow inside lens
+            float softSw = dpf(2.2f);
+            capsuleBorderPaint.setShader(null);
+            capsuleBorderPaint.setStrokeWidth(softSw);
+            capsuleBorderPaint.setColor(dark ? 0x38FFFFFF : 0x50A0ACC0);
+            RectF softInset = new RectF(
+                capsuleRect.left + softSw * 0.5f,
+                capsuleRect.top + softSw * 0.5f,
+                capsuleRect.right - softSw * 0.5f,
+                capsuleRect.bottom - softSw * 0.5f);
+            canvas.drawRoundRect(softInset, capRadius, capRadius, capsuleBorderPaint);
 
-            // 3. Crisp thin outer capsule border (0.85dp)
-            float sw = dpf(0.85f);
+            float sw = dpf(1.0f);
             capsuleBorderPaint.setStrokeWidth(sw);
             capsuleBorderPaint.setShader(new LinearGradient(
                 0f, capsuleRect.top, 0f, capsuleRect.bottom,
-                dark ? new int[] { 0x55FFFFFF, 0x1CFFFFFF, 0x28FFFFFF }
-                     : new int[] { 0x28000000, 0x0A000000, 0xF2FFFFFF },
+                dark ? new int[] { 0x78FFFFFF, 0x30FFFFFF, 0x55FFFFFF }
+                     : new int[] { 0xE6FFFFFF, 0x30A0B0C8, 0xF2FFFFFF },
                 new float[] { 0f, 0.5f, 1f },
                 Shader.TileMode.CLAMP));
             RectF borderInset = new RectF(
@@ -1212,8 +1213,8 @@ public class LiquidGlassTabBarHook extends BaseHook
             float restH = Math.max(capsuleRect.height() - dpf(10f), dpf(44f));
             float restW = Math.max(currentW - dpf(4f), restH * 1.28f);
 
-            float inflatedH = capsuleRect.height() * 1.24f;
-            float inflatedW = Math.max(currentW * 1.44f, inflatedH * 1.44f);
+            float inflatedH = capsuleRect.height() + dpf(18.0f);
+            float inflatedW = Math.max(currentW * 1.72f, inflatedH * 1.56f);
 
             float absStretch = Math.abs(stretchX);
             float w = (restW + (inflatedW - restW) * inflateProgress) * (1f + absStretch * 0.36f);

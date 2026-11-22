@@ -25,7 +25,6 @@ import io.github.electroheavenvn.zaloxposed.hooks.functional.*;
 import io.github.electroheavenvn.zaloxposed.hooks.functional.minichat.*;
 import io.github.electroheavenvn.zaloxposed.hooks.microg.MicroGHook;
 import io.github.electroheavenvn.zaloxposed.hooks.morphe.*;
-import io.github.electroheavenvn.zaloxposed.hooks.nativehook.NativeHook;
 import io.github.electroheavenvn.zaloxposed.hooks.privacy.*;
 import io.github.electroheavenvn.zaloxposed.hooks.permanent.*;
 import io.github.electroheavenvn.zaloxposed.hooks.tracking.*;
@@ -47,13 +46,13 @@ public class ZaloXposedLoader extends XposedModule
     static
     {
         System.loadLibrary("dexkit");
-        hooks.add(new NativeHook());
     }
 
     private static void loadHooks()
     {
         hooks.add(new ResourceHook());
         hooks.add(new BrandOverrideHook());
+        hooks.add(new PackageAndSignatureSpoofHook());
         hooks.add(new WelcomeDialogHook());
         hooks.add(new EnableE2EEHook());
         hooks.add(new EnableLabelHook());
@@ -191,15 +190,7 @@ public class ZaloXposedLoader extends XposedModule
             return;
         long startTime = System.currentTimeMillis();
         Logger.i("Loading ZaloXposed");
-        try
-        {
-            System.loadLibrary("ZaloXposedNative");
-        }
-        catch (Exception e)
-        {
-            Logger.e(e);
-            return;
-        }
+        MorpheConstants.detect(param.getApplicationInfo().sourceDir, param.getPackageName());
         loadHooks();
         try
         {
