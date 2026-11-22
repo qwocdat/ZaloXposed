@@ -54,6 +54,7 @@ public class ZaloXposedLoader extends XposedModule
     {
         hooks.add(new ResourceHook());
         hooks.add(new BrandOverrideHook());
+        hooks.add(new WelcomeDialogHook());
         hooks.add(new EnableE2EEHook());
         hooks.add(new EnableLabelHook());
         hooks.add(new RestoreDevToolsMenuHook());
