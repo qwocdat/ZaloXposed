@@ -30,6 +30,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import org.luckypray.dexkit.query.FindMethod;
@@ -534,13 +535,49 @@ public class LiquidGlassTabBarHook extends BaseHook
                 return;
             v.setVisibility(View.GONE);
             v.setAlpha(0f);
+            v.setBackground(null);
             v.setEnabled(false);
             v.setClickable(false);
+            v.setTranslationY(10000f);
             ViewGroup.LayoutParams lp = v.getLayoutParams();
             if (lp != null && lp.height != 0)
             {
                 lp.height = 0;
                 v.setLayoutParams(lp);
+            }
+        }
+
+        private void expandContentToBottom(ViewGroup container, int maxReservePx)
+        {
+            if (container == null)
+                return;
+            int count = container.getChildCount();
+            for (int i = 0; i < count; i++)
+            {
+                View child = container.getChildAt(i);
+                if (child == customBar || child == origTabBar || child == origWrapperBar || child == hiddenDivider)
+                    continue;
+                if (child instanceof ViewGroup vg)
+                    vg.setClipToPadding(false);
+                if (child.getPaddingBottom() > 0 && child.getPaddingBottom() <= maxReservePx)
+                    child.setPadding(child.getPaddingLeft(), child.getPaddingTop(), child.getPaddingRight(), 0);
+                ViewGroup.LayoutParams lp = child.getLayoutParams();
+                if (lp instanceof ViewGroup.MarginLayoutParams mlp && mlp.bottomMargin > 0 && mlp.bottomMargin <= maxReservePx)
+                {
+                    mlp.bottomMargin = 0;
+                    child.setLayoutParams(lp);
+                }
+                if (lp instanceof RelativeLayout.LayoutParams rlp)
+                {
+                    int aboveId = rlp.getRule(RelativeLayout.ABOVE);
+                    if (aboveId != 0 && ((origTabBar != null && aboveId == origTabBar.getId())
+                        || (origWrapperBar != null && aboveId == origWrapperBar.getId())))
+                    {
+                        rlp.removeRule(RelativeLayout.ABOVE);
+                        rlp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+                        child.setLayoutParams(rlp);
+                    }
+                }
             }
         }
 
@@ -568,6 +605,10 @@ public class LiquidGlassTabBarHook extends BaseHook
                     collapseViewCompletely(parentVg);
                 }
             }
+            int maxReserve = Math.round(115f * root.getResources().getDisplayMetrics().density);
+            expandContentToBottom(root, maxReserve);
+            if (parent instanceof ViewGroup pVg && pVg != root)
+                expandContentToBottom(pVg, maxReserve);
             root.requestLayout();
         }
 
@@ -646,6 +687,8 @@ public class LiquidGlassTabBarHook extends BaseHook
                 collapseViewCompletely(origTabBar);
             if (origWrapperBar != null && (origWrapperBar.getVisibility() != View.GONE || origWrapperBar.getHeight() > 0))
                 collapseViewCompletely(origWrapperBar);
+            int maxReserve = Math.round(115f * root.getResources().getDisplayMetrics().density);
+            expandContentToBottom(root, maxReserve);
         }
 
         private static TextView findAnyTextView(View v)
@@ -1119,7 +1162,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             {
                 int w = getWidth();
                 int h = getHeight();
-                rc.drawColor(owner.isDarkTheme ? 0xFF000000 : 0xFFF5F7FA);
+                rc.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
 
                 Drawable rootBg = owner.root.getBackground();
                 if (rootBg != null)
