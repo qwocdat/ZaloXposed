@@ -4,8 +4,8 @@ import io.github.electroheavenvn.zaloxposed.utilities.Config;
 
 public final class MorpheConstants
 {
-    private static final String MODULE_NAME = "ZaloXposed";
-    private static final String MORPHE_MODULE_NAME = "ZaloMorphe";
+    private static final String MODULE_NAME = "ZaloxPosed X DigitalXiao";
+    private static final String MORPHE_MODULE_NAME = "ZaloxPosed X DigitalXiao";
 
     private MorpheConstants() { }
 

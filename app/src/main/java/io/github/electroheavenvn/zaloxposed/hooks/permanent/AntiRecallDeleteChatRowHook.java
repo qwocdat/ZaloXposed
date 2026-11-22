@@ -162,7 +162,7 @@ public class AntiRecallDeleteChatRowHook extends BaseHook
                     String value = (String) f.get(quote);
                     if (value == null)
                         continue;
-                    if (value.equals("ZaloXposed by DigitalXiao/Quocdat") || value.equals("ZaloMorphe by DigitalXiao/Quocdat") || value.equals("ZaloXposed by ElectroHeavenVN") || value.equals("ZaloMorphe by ElectroHeavenVN"))
+                    if (value.equals("ZaloXposed by DigitalXiao/Quocdat") || value.equals("ZaloxPosed X DigitalXiao by DigitalXiao/Quocdat") || value.equals("ZaloMorphe by DigitalXiao/Quocdat") || value.equals("ZaloXposed by ElectroHeavenVN") || value.equals("ZaloMorphe by ElectroHeavenVN"))
                     {
                         quoteDisplayNameField = f;
                         count++;
@@ -185,7 +185,7 @@ public class AntiRecallDeleteChatRowHook extends BaseHook
             else
             {
                 Object quoteDisplayName = quoteDisplayNameField.get(quote);
-                if (!"ZaloXposed by DigitalXiao/Quocdat".equals(quoteDisplayName) && !"ZaloMorphe by DigitalXiao/Quocdat".equals(quoteDisplayName) && !"ZaloXposed by ElectroHeavenVN".equals(quoteDisplayName) && !"ZaloMorphe by ElectroHeavenVN".equals(quoteDisplayName))
+                if (!"ZaloXposed by DigitalXiao/Quocdat".equals(quoteDisplayName) && !"ZaloxPosed X DigitalXiao by DigitalXiao/Quocdat".equals(quoteDisplayName) && !"ZaloMorphe by DigitalXiao/Quocdat".equals(quoteDisplayName) && !"ZaloXposed by ElectroHeavenVN".equals(quoteDisplayName) && !"ZaloMorphe by ElectroHeavenVN".equals(quoteDisplayName))
                     return chain.proceed();
                 Object attr = quoteAttrField.get(quote);
                 if (attr == null)

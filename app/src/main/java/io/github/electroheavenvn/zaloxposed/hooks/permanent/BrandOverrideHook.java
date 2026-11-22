@@ -11,13 +11,15 @@ import io.github.electroheavenvn.zaloxposed.hooks.BaseHook;
 import io.github.electroheavenvn.zaloxposed.utilities.Logger;
 
 /**
- * Replaces author branding strings injected at runtime (including watermarks from native hooks)
- * with DigitalXiao/Quocdat across TextView text/hints and Toasts.
+ * Replaces author and module branding strings injected at runtime (including watermarks from
+ * native hooks) with ZaloxPosed X DigitalXiao and DigitalXiao/Quocdat.
  */
 public class BrandOverrideHook extends BaseHook
 {
-    private static final String TARGET_BRAND = "DigitalXiao/Quocdat";
+    private static final String TARGET_AUTHOR = "DigitalXiao/Quocdat";
+    private static final String TARGET_MODULE = "ZaloxPosed X DigitalXiao";
     private static final Pattern AUTHOR_PATTERN = Pattern.compile("ElectroHeavenVN", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MORPHE_PATTERN = Pattern.compile("ZaloMorphe", Pattern.CASE_INSENSITIVE);
 
     @Override
     public void installHooks() throws Throwable
@@ -108,8 +110,16 @@ public class BrandOverrideHook extends BaseHook
         if (input == null || input.length() == 0)
             return input;
         String text = input.toString();
-        if (text.contains("ElectroHeavenVN") || text.contains("electroheavenvn") || text.contains("ELECTROHEAVENVN"))
-            return AUTHOR_PATTERN.matcher(text).replaceAll(TARGET_BRAND);
-        return input;
+        String lower = text.toLowerCase();
+        boolean hasAuthor = lower.contains("electroheavenvn");
+        boolean hasMorphe = lower.contains("zalomorphe");
+        if (!hasAuthor && !hasMorphe)
+            return input;
+        String out = text;
+        if (hasMorphe)
+            out = MORPHE_PATTERN.matcher(out).replaceAll(TARGET_MODULE);
+        if (hasAuthor)
+            out = AUTHOR_PATTERN.matcher(out).replaceAll(TARGET_AUTHOR);
+        return out;
     }
 }
