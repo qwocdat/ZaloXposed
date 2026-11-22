@@ -484,7 +484,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             int barHeight = Math.round(62f * density);
             int overflow = Math.round(28f * density);
             int bottomInset = getNavigationBarBottomInset(root);
-            int bottomMargin = Math.max(bottomInset + Math.round(8f * density), Math.round(14f * density));
+            int bottomMargin = Math.max(bottomInset + Math.round(12f * density), Math.round(18f * density));
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -591,6 +591,19 @@ public class LiquidGlassTabBarHook extends BaseHook
                         rlp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
                         child.setLayoutParams(rlp);
                     }
+                }
+                if (lp != null && lp.getClass().getName().contains("ConstraintLayout"))
+                {
+                    try
+                    {
+                        java.lang.reflect.Field f = lp.getClass().getField("goneBottomMargin");
+                        if (f.getInt(lp) > 0)
+                        {
+                            f.setInt(lp, 0);
+                            child.setLayoutParams(lp);
+                        }
+                    }
+                    catch (Throwable ignored) { }
                 }
             }
         }
@@ -1188,25 +1201,28 @@ public class LiquidGlassTabBarHook extends BaseHook
                 }
 
                 int childCount = owner.root.getChildCount();
-                for (int i = 0; i < childCount; i++)
+                View topContent = null;
+                for (int i = childCount - 1; i >= 0; i--)
                 {
                     View child = owner.root.getChildAt(i);
                     if (child == this || child == owner.origTabBar || child == owner.origWrapperBar || child == owner.hiddenDivider)
                         continue;
                     if (child.getVisibility() != View.VISIBLE || child.getAlpha() <= 0.01f)
                         continue;
-                    float tx = child.getTranslationX();
-                    float ty = child.getTranslationY();
-                    float cLeft = child.getLeft() + tx;
-                    float cTop = child.getTop() + ty;
-                    float cRight = child.getRight() + tx;
-                    float cBottom = child.getBottom() + ty;
-                    if (cRight <= getLeft() || cLeft >= getLeft() + w || cBottom <= getTop() || cTop >= getTop() + h)
-                        continue;
+                    if (child.getWidth() >= owner.root.getWidth() * 0.8f && child.getHeight() >= owner.root.getHeight() * 0.5f)
+                    {
+                        topContent = child;
+                        break;
+                    }
+                }
+                if (topContent != null)
+                {
+                    float cLeft = topContent.getLeft() + topContent.getTranslationX();
+                    float cTop = topContent.getTop() + topContent.getTranslationY();
                     rc.save();
                     rc.translate(cLeft - getLeft(), cTop - getTop());
-                    rc.clipRect(0, 0, child.getWidth(), child.getHeight());
-                    child.draw(rc);
+                    rc.clipRect(0, 0, topContent.getWidth(), topContent.getHeight());
+                    topContent.draw(rc);
                     rc.restore();
                 }
             }
