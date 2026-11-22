@@ -445,8 +445,7 @@ public class AmoledThemeHook extends BaseHook
                     {
                         try
                         {
-                            refreshTheme(ctx);
-                            publishThemeChanged();
+                            notifyThemeChanged(ctx);
                         }
                         catch (Throwable ignored) { }
                     });
