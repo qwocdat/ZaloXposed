@@ -1,6 +1,7 @@
 package io.github.electroheavenvn.zaloxposed.hooks.ui;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -15,6 +16,7 @@ import android.graphics.RenderNode;
 import android.graphics.RuntimeShader;
 import android.graphics.Shader;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -47,16 +49,14 @@ import io.github.electroheavenvn.zaloxposed.utilities.DexKitCache;
 import io.github.electroheavenvn.zaloxposed.utilities.Logger;
 
 /**
- * Single-Pass GPU Liquid Glass Bottom TabBar (v10):
- * - Matches the exact optical refraction & meniscus geometry of the reference Liquid Clock screenshot:
- *   - Refracted top/bottom capsule borders stay straight horizontally across the middle and curve
- *     smoothly at both rounded ends to connect 1-to-1 with the outer capsule border.
- *   - Objects touching the glass rim are smoothly pulled/warped inward into the curved bevel with
- *     authentic 3-channel Cauchy RGB chromatic dispersion, while the center remains 100% flat & sharp.
- *   - Pure white glow strictly clipped inside the TabBar capsule background when touched/held.
- * - Supports 2 selectable themes in Settings -> Giao diện -> Thanh dưới:
- *   0 = Sáng (Light): bright frosted white glass + #111111 inactive + #007AFF active blue.
- *   1 = Tối (Dark): charcoal translucent glass (matching reference image 2) + #FFFFFF inactive + #0A84FF active blue.
+ * Single-Pass Real-Backdrop GPU Liquid Glass Bottom TabBar (v15):
+ * - Captures live Zalo views & wallpaper underneath via hardware RenderNode (zero-copy GPU):
+ *   1. TabBar capsule uses crystal-clear frosted backdrop + subtle peripheral rim refraction.
+ *   2. Liquid Glass lens refracts BOTH inside the TabBar AND in the protruding top/bottom/side
+ *      regions over real Zalo chat rows, avatars, and wallpapers with 3-channel Cauchy RGB dispersion.
+ * - Soft luminous white touch glow & gentle spring-physics follow/tilt anywhere inside the TabBar.
+ * - Scroll-to-minimize: swiping down through chats fades out tab labels, glides icons smoothly
+ *   to the vertical center of the capsule, and compacts the pill.
  */
 public class LiquidGlassTabBarHook extends BaseHook
 {
@@ -64,6 +64,7 @@ public class LiquidGlassTabBarHook extends BaseHook
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final WeakHashMap<FrameLayout, TabBarReplacement> ATTACHED = new WeakHashMap<>();
     private static WeakReference<FrameLayout> lastMainRoot = new WeakReference<>(null);
+    private static volatile boolean isCapturingBackdrop = false;
 
     @Override
     public void installHooks() throws Throwable
@@ -104,6 +105,29 @@ public class LiquidGlassTabBarHook extends BaseHook
                 });
             }
         });
+
+        // Observe vertical scroll gestures in chat/content area for smooth scroll-to-minimize
+        try
+        {
+            Method dispatchTouch = Activity.class.getDeclaredMethod("dispatchTouchEvent", MotionEvent.class);
+            doHook(dispatchTouch, 5, chain ->
+            {
+                Object arg = chain.getArg(0);
+                if (arg instanceof MotionEvent ev && Config.getEnableLiquidGlassTabBar())
+                {
+                    for (TabBarReplacement rep : ATTACHED.values())
+                    {
+                        if (rep != null)
+                            rep.onActivityTouchEvent(ev);
+                    }
+                }
+                return chain.proceed();
+            });
+        }
+        catch (Throwable t)
+        {
+            Logger.e(t);
+        }
 
         Class<?> mainTabViewCls = Class.forName("com.zing.zalo.ui.maintab.MainTabView", false, classLoader);
         List<Method> methods = DexKitCache.GetMethods("LiquidGlassTabBar_MainTabView_OnCreateView", () -> bridge.findMethod(FindMethod.create()
@@ -350,6 +374,11 @@ public class LiquidGlassTabBarHook extends BaseHook
         private boolean isDarkTheme = false;
         private long lastUserSelectMs = 0L;
 
+        // Scroll-to-minimize state
+        private float scrollDownY = 0f;
+        private float lastScrollY = 0f;
+        private boolean trackingScroll = false;
+
         private final Runnable syncPoller = new Runnable()
         {
             @Override
@@ -358,7 +387,7 @@ public class LiquidGlassTabBarHook extends BaseHook
                 if (!attached || customBar == null)
                     return;
                 syncStateFromOriginal();
-                MAIN_HANDLER.postDelayed(this, 260);
+                MAIN_HANDLER.postDelayed(this, 180);
             }
         };
 
@@ -366,6 +395,48 @@ public class LiquidGlassTabBarHook extends BaseHook
         {
             this.root = root;
             this.origTabBar = origTabBar;
+        }
+
+        void onActivityTouchEvent(MotionEvent ev)
+        {
+            if (!attached || customBar == null || !root.isAttachedToWindow())
+                return;
+            int action = ev.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN)
+            {
+                int[] barLoc = new int[2];
+                customBar.getLocationInWindow(barLoc);
+                if (ev.getRawY() < barLoc[1])
+                {
+                    trackingScroll = true;
+                    scrollDownY = ev.getRawY();
+                    lastScrollY = scrollDownY;
+                }
+                else
+                {
+                    trackingScroll = false;
+                }
+            }
+            else if (action == MotionEvent.ACTION_MOVE && trackingScroll)
+            {
+                float curY = ev.getRawY();
+                float dy = curY - lastScrollY;
+                float totalDy = curY - scrollDownY;
+                lastScrollY = curY;
+                float threshold = 10f * root.getResources().getDisplayMetrics().density;
+                if (totalDy < -threshold * 1.5f && dy < -2f)
+                {
+                    customBar.setCollapsed(true);
+                }
+                else if (totalDy > threshold * 1.5f && dy > 2f)
+                {
+                    customBar.setCollapsed(false);
+                }
+            }
+            else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+            {
+                trackingScroll = false;
+            }
         }
 
         boolean attach()
@@ -402,7 +473,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             float density = root.getResources().getDisplayMetrics().density;
             int sideMargin = Math.round(14f * density);
             int barHeight = Math.round(62f * density);
-            int overflow = Math.round(24f * density);
+            int overflow = Math.round(28f * density);
             int bottomInset = getNavigationBarBottomInset(root);
             int bottomMargin = Math.max(bottomInset + Math.round(8f * density), Math.round(14f * density));
 
@@ -422,7 +493,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             attached = true;
             syncStateFromOriginal();
             customBar.snapImmediately();
-            MAIN_HANDLER.postDelayed(syncPoller, 300);
+            MAIN_HANDLER.postDelayed(syncPoller, 220);
             return true;
         }
 
@@ -740,17 +811,15 @@ public class LiquidGlassTabBarHook extends BaseHook
     @SuppressLint("ViewConstructor")
     private static final class LiquidGlassTabBarView extends View
     {
-        // EXACT LIQUID CLOCK REFRACTION & DISPERSION SHADER (v10):
-        // 1. At outer edge (u = 0, d = 0): displacement is MAXIMUM (grad * maxRefract), then decays
-        //    smoothly as (1 - u)^2.1 to 0 at u = 1 (flat center plateau).
-        //    -> Because grad points outward, sampling `fragCoord + grad * disp` pulls EXTERIOR pixels
-        //       into the top/bottom bevel band, creating the EXACT straight-middle, corner-curved-up
-        //       recessed lens band of Screenshot_2026-11-22-20-46-50-849_com.example.liquidclock-edit.jpg!
-        //    -> And any icon/text straddling the side edge is smoothly pulled/warped INWARD into the rim
-        //       with true 3-channel Cauchy RGB dispersion (0.76 / 1.00 / 1.28) and zero split/double ghosting!
-        // 2. Center plateau (u = 1): disp = 0 -> 100% flat, crisp, stationary.
-        private static final String LIQUID_CLOCK_AGSL =
+        // Real-Backdrop Single-Pass Optical Liquid Glass Shader (v15):
+        // - Refracts live Zalo views & wallpaper underneath BOTH along the TabBar capsule bevel
+        //   AND across the full protruding Liquid Glass lens (with 3-channel Cauchy RGB dispersion).
+        // - Strictly limits active blue ink tinting inside uBarRect so background Zalo chat text
+        //   underneath the protruding lens edges keeps its true natural colors.
+        private static final String LIQUID_GLASS_V15_AGSL =
             "uniform shader content;" +
+            "uniform float4 uBarRect;" +
+            "uniform float uBarRadius;" +
             "uniform float4 uRect;" +
             "uniform float uRadius;" +
             "uniform float uInflate;" +
@@ -766,68 +835,75 @@ public class LiquidGlassTabBarHook extends BaseHook
             "  float gy = sdRoundBox(p + float2(0.0, e), b, r) - sdRoundBox(p - float2(0.0, e), b, r);" +
             "  return normalize(float2(gx, gy) + float2(0.00001));" +
             "}" +
-            "float3 sampleGlassColor(float2 coord, float isDarkMode) {" +
-            "  half4 px = content.eval(coord);" +
+            "float3 tintTabInkIfInsideBar(half4 px, float2 coord, float isDarkMode) {" +
             "  float a = clamp(float(px.a), 0.0, 1.0);" +
-            "  float3 straight = (a > 0.004) ? (float3(px.rgb) / max(a, 0.004)) : float3(0.0);" +
-            "  float mx = max(straight.r, max(straight.g, straight.b));" +
-            "  float mn = min(straight.r, min(straight.g, straight.b));" +
+            "  float3 col = (a > 0.004) ? (float3(px.rgb) / max(a, 0.004)) : float3(0.0);" +
+            "  float2 barC = (uBarRect.xy + uBarRect.zw) * 0.5;" +
+            "  float2 barH = (uBarRect.zw - uBarRect.xy) * 0.5;" +
+            "  float dBar = sdRoundBox(coord - barC, barH, uBarRadius);" +
+            "  if (dBar > 0.5) return col;" +
+            "  float mx = max(col.r, max(col.g, col.b));" +
+            "  float mn = min(col.r, min(col.g, col.b));" +
             "  float sat = (mx - mn) / max(mx, 0.001);" +
-            "  float luma = dot(straight, float3(0.299, 0.587, 0.114));" +
-            "  float inkLight = smoothstep(0.42, 0.14, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
-            "  float inkDark  = smoothstep(0.60, 0.88, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
+            "  float luma = dot(col, float3(0.299, 0.587, 0.114));" +
+            "  float inkLight = smoothstep(0.32, 0.08, luma) * (1.0 - smoothstep(0.16, 0.30, sat));" +
+            "  float inkDark  = smoothstep(0.68, 0.92, luma) * (1.0 - smoothstep(0.16, 0.30, sat));" +
             "  float inkMask = mix(inkLight, inkDark, isDarkMode);" +
             "  float3 activeBlue = mix(float3(0.0, 0.478, 1.0), float3(0.04, 0.52, 1.0), isDarkMode);" +
-            "  float3 tinted = mix(straight, activeBlue, inkMask);" +
-            "  float3 envCol = mix(float3(0.76, 0.80, 0.86), float3(0.01, 0.01, 0.015), isDarkMode);" +
-            "  return mix(envCol, tinted, a);" +
+            "  return mix(col, activeBlue, inkMask);" +
             "}" +
-            "half4 tintRestInk(half4 px, float isDarkMode) {" +
-            "  float a = float(px.a);" +
-            "  if (a < 0.05) return px;" +
-            "  float3 straight = float3(px.rgb) / max(a, 0.001);" +
-            "  float mx = max(straight.r, max(straight.g, straight.b));" +
-            "  float mn = min(straight.r, min(straight.g, straight.b));" +
-            "  float sat = (mx - mn) / max(mx, 0.001);" +
-            "  float luma = dot(straight, float3(0.299, 0.587, 0.114));" +
-            "  float inkLight = smoothstep(0.42, 0.14, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
-            "  float inkDark  = smoothstep(0.60, 0.88, luma) * (1.0 - smoothstep(0.18, 0.35, sat));" +
-            "  float inkMask = mix(inkLight, inkDark, isDarkMode);" +
-            "  float3 activeBlue = mix(float3(0.0, 0.478, 1.0), float3(0.04, 0.52, 1.0), isDarkMode);" +
-            "  return half4(half3(mix(straight, activeBlue, inkMask) * a), px.a);" +
+            "half4 evalBarCapsule(float2 fragCoord, float2 barC, float2 barH, float dBar) {" +
+            "  if (dBar <= 0.0 && dBar > -8.5 * uDensity) {" +
+            "    float ub = clamp(-dBar / (8.5 * uDensity), 0.0, 1.0);" +
+            "    float bCurve = pow(1.0 - ub, 2.6);" +
+            "    float2 gBar = sdGrad(fragCoord - barC, barH, uBarRadius);" +
+            "    float bMag = bCurve * (5.5 * uDensity);" +
+            "    half4 bR = content.eval(fragCoord - gBar * (bMag * 0.78));" +
+            "    half4 bG = content.eval(fragCoord - gBar * bMag);" +
+            "    half4 bB = content.eval(fragCoord - gBar * (bMag * 1.24));" +
+            "    float nyB = (fragCoord.y - barC.y) / max(barH.y, 1.0);" +
+            "    float bRim = (1.0 - smoothstep(0.0, 1.1 * uDensity, -dBar)) * (0.28 + 0.16 * max(0.0, -nyB));" +
+            "    half3 rgb = clamp(half3(bR.r, bG.g, bB.b) + half3(bRim), half3(0.0), half3(1.0));" +
+            "    return half4(rgb, bG.a);" +
+            "  }" +
+            "  return content.eval(fragCoord);" +
             "}" +
             "half4 main(float2 fragCoord) {" +
+            "  float2 barC = (uBarRect.xy + uBarRect.zw) * 0.5;" +
+            "  float2 barH = (uBarRect.zw - uBarRect.xy) * 0.5;" +
+            "  float dBar = sdRoundBox(fragCoord - barC, barH, uBarRadius);" +
             "  float2 center = (uRect.xy + uRect.zw) * 0.5;" +
             "  float2 halfSize = (uRect.zw - uRect.xy) * 0.5;" +
             "  float2 p = fragCoord - center;" +
             "  float d = sdRoundBox(p, halfSize, uRadius);" +
-            "  if (d > 0.8) return content.eval(fragCoord);" +
+            "  half4 basePx = evalBarCapsule(fragCoord, barC, barH, dBar);" +
+            "  if (d > 0.8) return basePx;" +
             "  float mask = 1.0 - smoothstep(-0.7, 0.7, d);" +
-            "  half4 outsidePx = content.eval(fragCoord);" +
             "  if (uInflate <= 0.015) {" +
-            "    return mix(outsidePx, tintRestInk(outsidePx, uDark), half(mask));" +
+            "    float3 tCol = tintTabInkIfInsideBar(basePx, fragCoord, uDark);" +
+            "    return mix(basePx, half4(half3(tCol * float(basePx.a)), basePx.a), half(mask));" +
             "  }" +
-            "  float bevelW = 17.5 * uDensity;" +
+            "  float bevelW = 18.0 * uDensity;" +
             "  float u = clamp(-d / bevelW, 0.0, 1.0);" +
-            "  float lensCurve = pow(1.0 - u, 3.8);" +
+            "  float lensCurve = pow(1.0 - u, 3.6);" +
             "  float2 grad = sdGrad(p, halfSize, uRadius);" +
-            "  float refractMag = lensCurve * (16.5 * uDensity) * uInflate;" +
-                        // Convex magnifying refraction (-grad) with 3-channel Cauchy RGB dispersion
-            "  float3 cR = sampleGlassColor(fragCoord - grad * (refractMag * 0.65), uDark);" +
-            "  float3 cG = sampleGlassColor(fragCoord - grad * (refractMag * 1.00), uDark);" +
-            "  float3 cB = sampleGlassColor(fragCoord - grad * (refractMag * 1.42), uDark);" +
+            "  float refractMag = lensCurve * (18.5 * uDensity) * uInflate;" +
+            "  float2 cRCoord = fragCoord - grad * (refractMag * 0.58);" +
+            "  float2 cGCoord = fragCoord - grad * (refractMag * 1.00);" +
+            "  float2 cBCoord = fragCoord - grad * (refractMag * 1.52);" +
+            "  float3 cR = tintTabInkIfInsideBar(content.eval(cRCoord), cRCoord, uDark);" +
+            "  float3 cG = tintTabInkIfInsideBar(content.eval(cGCoord), cGCoord, uDark);" +
+            "  float3 cB = tintTabInkIfInsideBar(content.eval(cBCoord), cBCoord, uDark);" +
             "  float3 rgb = float3(cR.r, cG.g, cB.b);" +
-                        // Ultra-thin physical Fresnel rim highlight (zero milky plastic fill)
-            "  float fresnel = pow(1.0 - u, 4.0) * uInflate;" +
-            "  float outerRim = (1.0 - smoothstep(0.0, 1.05 * uDensity, -d)) * uInflate;" +
+            "  float fresnel = pow(1.0 - u, 3.8) * uInflate;" +
+            "  float outerRim = (1.0 - smoothstep(0.0, 1.1 * uDensity, -d)) * uInflate;" +
             "  float ny = p.y / max(halfSize.y, 1.0);" +
-            "  float topSheen = pow(max(0.0, -ny), 2.8) * fresnel;" +
-            "  float botSheen = pow(max(0.0,  ny), 2.8) * fresnel;" +
-            "  float spec = outerRim * mix(0.52, 0.34, uDark) + (topSheen * 0.20 + botSheen * 0.16);" +
+            "  float topSheen = pow(max(0.0, -ny), 2.6) * fresnel;" +
+            "  float botSheen = pow(max(0.0,  ny), 2.6) * fresnel;" +
+            "  float spec = outerRim * mix(0.55, 0.36, uDark) + (topSheen * 0.24 + botSheen * 0.16);" +
             "  float3 glassRgb = clamp(rgb + float3(spec), 0.0, 1.0);" +
-            "  float lensAlpha = clamp(mix(float(outsidePx.a), 0.96, uInflate), 0.0, 1.0);" +
-            "  half4 lensPx = half4(half3(glassRgb * lensAlpha), half(lensAlpha));" +
-            "  return mix(outsidePx, lensPx, half(mask));" +
+            "  half4 lensPx = half4(half3(glassRgb), half(1.0));" +
+            "  return mix(basePx, lensPx, half(mask));" +
             "}";
 
         private final TabBarReplacement owner;
@@ -846,12 +922,15 @@ public class LiquidGlassTabBarHook extends BaseHook
         private final Paint badgeTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint fallbackRimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
+        private final RectF baseCapsuleRect = new RectF();
         private final RectF capsuleRect = new RectF();
         private final RectF dropletRect = new RectF();
         private final Path capsuleClipPath = new Path();
         private final Path clipPath = new Path();
         private final Path iconPath = new Path();
 
+        private Object rawBackdropNodeObj;
+        private Object frostedBackdropNodeObj;
         private Object unifiedRenderNodeObj;
         private Object runtimeShaderObj;
 
@@ -866,6 +945,23 @@ public class LiquidGlassTabBarHook extends BaseHook
         private float inflateProgress = 0f;
         private float targetInflate = 0f;
         private float stretchX = 0f;
+
+        // Touch glow + subtle follow/tilt across entire TabBar
+        private float touchGlowAlpha = 0f;
+        private float targetTouchGlow = 0f;
+        private float touchGlowX = 0f;
+        private float touchGlowY = 0f;
+        private float barOffsetX = 0f;
+        private float targetBarOffsetX = 0f;
+        private float barOffsetY = 0f;
+        private float targetBarOffsetY = 0f;
+        private float barScale = 1f;
+        private float targetBarScale = 1f;
+
+        // Scroll-to-minimize state
+        private float collapseProgress = 0f;
+        private float targetCollapse = 0f;
+
         private long lastFrameMs = 0L;
         private boolean animating = false;
 
@@ -883,7 +979,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             this.density = context.getResources().getDisplayMetrics().density;
             this.scaledDensity = context.getResources().getDisplayMetrics().scaledDensity;
             this.touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-            this.overflowPad = dp(24f);
+            this.overflowPad = dp(28f);
 
             capsuleBorderPaint.setStyle(Paint.Style.STROKE);
             fallbackRimPaint.setStyle(Paint.Style.STROKE);
@@ -898,14 +994,14 @@ public class LiquidGlassTabBarHook extends BaseHook
             badgeTextPaint.setTypeface(Typeface.DEFAULT_BOLD);
             badgeTextPaint.setTextSize(9f * scaledDensity);
 
-            capsuleFillPaint.setShadowLayer(dpf(12f), 0f, dpf(4f), 0x1A001433);
-
             if (Build.VERSION.SDK_INT >= 33)
             {
                 try
                 {
-                    unifiedRenderNodeObj = new RenderNode("DXLiquidClockGlassBar");
-                    runtimeShaderObj = new RuntimeShader(LIQUID_CLOCK_AGSL);
+                    rawBackdropNodeObj = new RenderNode("DXRawBackdrop");
+                    frostedBackdropNodeObj = new RenderNode("DXFrostedBackdrop");
+                    unifiedRenderNodeObj = new RenderNode("DXLiquidGlassV15");
+                    runtimeShaderObj = new RuntimeShader(LIQUID_GLASS_V15_AGSL);
                 }
                 catch (Throwable t)
                 {
@@ -914,8 +1010,19 @@ public class LiquidGlassTabBarHook extends BaseHook
             }
         }
 
+        void setCollapsed(boolean collapsed)
+        {
+            float next = collapsed ? 1f : 0f;
+            if (Math.abs(targetCollapse - next) > 0.01f)
+            {
+                targetCollapse = next;
+                startAnimationLoop();
+            }
+        }
+
         void snapImmediately()
         {
+            updateDynamicCapsuleRect();
             if (getWidth() > 0 && !owner.tabs.isEmpty())
             {
                 float tabW = capsuleRect.width() / owner.tabs.size();
@@ -927,6 +1034,11 @@ public class LiquidGlassTabBarHook extends BaseHook
                 inflateProgress = 0f;
                 targetInflate = 0f;
                 stretchX = 0f;
+                touchGlowAlpha = 0f;
+                targetTouchGlow = 0f;
+                barOffsetX = 0f;
+                barOffsetY = 0f;
+                barScale = 1f;
             }
             invalidate();
         }
@@ -954,33 +1066,126 @@ public class LiquidGlassTabBarHook extends BaseHook
         protected void onSizeChanged(int w, int h, int oldw, int oldh)
         {
             super.onSizeChanged(w, h, oldw, oldh);
-            capsuleRect.set(overflowPad, overflowPad, w - overflowPad, h - overflowPad);
-            capsuleClipPath.reset();
-            float capR = capsuleRect.height() * 0.5f;
-            capsuleClipPath.addRoundRect(capsuleRect, capR, capR, Path.Direction.CW);
-            if (Build.VERSION.SDK_INT >= 29 && unifiedRenderNodeObj instanceof RenderNode node)
-                node.setPosition(0, 0, w, h);
+            baseCapsuleRect.set(overflowPad, overflowPad, w - overflowPad, h - overflowPad);
+            if (Build.VERSION.SDK_INT >= 29)
+            {
+                if (rawBackdropNodeObj instanceof RenderNode n)
+                    n.setPosition(0, 0, w, h);
+                if (frostedBackdropNodeObj instanceof RenderNode n)
+                    n.setPosition(0, 0, w, h);
+                if (unifiedRenderNodeObj instanceof RenderNode n)
+                    n.setPosition(0, 0, w, h);
+            }
             snapImmediately();
         }
 
-        private void drawUnifiedBarContent(Canvas canvas, boolean dark)
+        private void updateDynamicCapsuleRect()
+        {
+            if (baseCapsuleRect.isEmpty())
+                return;
+            float shrinkX = dpf(10f) * collapseProgress;
+            float shrinkH = dpf(14f) * collapseProgress;
+            float shiftDown = dpf(6f) * collapseProgress;
+
+            float cx = baseCapsuleRect.centerX() + barOffsetX;
+            float cy = baseCapsuleRect.centerY() + shiftDown + barOffsetY;
+            float halfW = (baseCapsuleRect.width() * 0.5f - shrinkX) * barScale;
+            float halfH = (baseCapsuleRect.height() * 0.5f - shrinkH * 0.5f) * barScale;
+
+            capsuleRect.set(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
+            capsuleClipPath.reset();
+            float capR = capsuleRect.height() * 0.5f;
+            capsuleClipPath.addRoundRect(capsuleRect, capR, capR, Path.Direction.CW);
+        }
+
+        private void captureLiveBackdrop(Canvas rc)
+        {
+            if (isCapturingBackdrop)
+                return;
+            isCapturingBackdrop = true;
+            try
+            {
+                int w = getWidth();
+                int h = getHeight();
+                rc.drawColor(owner.isDarkTheme ? 0xFF000000 : 0xFFF5F7FA);
+
+                Drawable rootBg = owner.root.getBackground();
+                if (rootBg != null)
+                {
+                    rc.save();
+                    rc.translate(-getLeft(), -getTop());
+                    rootBg.draw(rc);
+                    rc.restore();
+                }
+
+                int childCount = owner.root.getChildCount();
+                for (int i = 0; i < childCount; i++)
+                {
+                    View child = owner.root.getChildAt(i);
+                    if (child == this || child.getVisibility() != View.VISIBLE)
+                        continue;
+                    int cLeft = child.getLeft();
+                    int cTop = child.getTop();
+                    int cRight = child.getRight();
+                    int cBottom = child.getBottom();
+                    if (cRight <= getLeft() || cLeft >= getLeft() + w || cBottom <= getTop() || cTop >= getTop() + h)
+                        continue;
+                    rc.save();
+                    rc.translate(cLeft - getLeft() + child.getTranslationX(), cTop - getTop() + child.getTranslationY());
+                    child.draw(rc);
+                    rc.restore();
+                }
+            }
+            catch (Throwable ignored) { }
+            finally
+            {
+                isCapturingBackdrop = false;
+            }
+        }
+
+        private void drawGlassForeground(Canvas canvas, boolean dark, boolean hasBackdrop)
         {
             float capRadius = capsuleRect.height() * 0.5f;
 
-            // 1. Translucent Glass Capsule Background (matching Liquid Clock charcoal / frosted white)
-            int topGlass = dark ? 0xEE36383C : 0xECF8FAFE;
-            int botGlass = dark ? 0xEA24262A : 0xE2EDF2FA;
-            capsuleFillPaint.setShadowLayer(dpf(12f), 0f, dpf(4f), dark ? 0x66000000 : 0x1A001433);
+            // 1. Crystal-clear translucent glass tint (much more transparent so live backdrop shows through!)
+            int topGlass = hasBackdrop
+                ? (dark ? 0x721C1E22 : 0x5EFFFFFF)
+                : (dark ? 0xEE36383C : 0xECF8FAFE);
+            int botGlass = hasBackdrop
+                ? (dark ? 0x62121418 : 0x4CEAF0F8)
+                : (dark ? 0xEA24262A : 0xE2EDF2FA);
+            capsuleFillPaint.setShadowLayer(dpf(10f), 0f, dpf(3f), dark ? 0x55000000 : 0x16001433);
             capsuleFillPaint.setShader(new LinearGradient(
                 0f, capsuleRect.top, 0f, capsuleRect.bottom, topGlass, botGlass, Shader.TileMode.CLAMP));
             canvas.drawRoundRect(capsuleRect, capRadius, capRadius, capsuleFillPaint);
             capsuleFillPaint.setShader(null);
+            capsuleFillPaint.clearShadowLayer();
 
-            // 2. Soft refractive edge rim (2.2dp soft + 1.0dp crisp) -> disperses into smooth rainbow inside lens
-            float softSw = dpf(2.2f);
+            // 2. Soft luminous WHITE touch glow anywhere inside TabBar capsule (even outside droplet!)
+            if (touchGlowAlpha > 0.01f)
+            {
+                canvas.save();
+                canvas.clipPath(capsuleClipPath);
+                float gx = (touchGlowX > 0f) ? touchGlowX : capsuleRect.centerX();
+                float gy = (touchGlowY > 0f) ? touchGlowY : capsuleRect.centerY();
+                float glowR = Math.max(capsuleRect.height() * 1.45f, dpf(86f));
+                int peak = Color.argb((int) ((dark ? 74 : 185) * touchGlowAlpha), 255, 255, 255);
+                int mid = Color.argb((int) ((dark ? 28 : 85) * touchGlowAlpha), 255, 255, 255);
+                innerWhiteGlowPaint.setShader(new RadialGradient(
+                    gx, gy, glowR,
+                    new int[] { peak, mid, Color.TRANSPARENT },
+                    new float[] { 0.0f, 0.52f, 1.0f },
+                    Shader.TileMode.CLAMP));
+                canvas.drawRect(capsuleRect, innerWhiteGlowPaint);
+                innerWhiteGlowPaint.setShader(null);
+                canvas.restore();
+            }
+
+            // 3. Crisp 2-layer glass capsule border
+            float softSw = dpf(1.8f);
             capsuleBorderPaint.setShader(null);
             capsuleBorderPaint.setStrokeWidth(softSw);
-            capsuleBorderPaint.setColor(dark ? 0x38FFFFFF : 0x50A0ACC0);
+            capsuleBorderPaint.setColor(dark ? 0x36FFFFFF : 0x44A8B8D0);
             RectF softInset = new RectF(
                 capsuleRect.left + softSw * 0.5f,
                 capsuleRect.top + softSw * 0.5f,
@@ -988,12 +1193,12 @@ public class LiquidGlassTabBarHook extends BaseHook
                 capsuleRect.bottom - softSw * 0.5f);
             canvas.drawRoundRect(softInset, capRadius, capRadius, capsuleBorderPaint);
 
-            float sw = dpf(1.0f);
+            float sw = dpf(0.9f);
             capsuleBorderPaint.setStrokeWidth(sw);
             capsuleBorderPaint.setShader(new LinearGradient(
                 0f, capsuleRect.top, 0f, capsuleRect.bottom,
-                dark ? new int[] { 0x78FFFFFF, 0x30FFFFFF, 0x55FFFFFF }
-                     : new int[] { 0xE6FFFFFF, 0x30A0B0C8, 0xF2FFFFFF },
+                dark ? new int[] { 0x80FFFFFF, 0x2AFFFFFF, 0x50FFFFFF }
+                     : new int[] { 0xF0FFFFFF, 0x34A0B0C8, 0xF2FFFFFF },
                 new float[] { 0f, 0.5f, 1f },
                 Shader.TileMode.CLAMP));
             RectF borderInset = new RectF(
@@ -1003,14 +1208,14 @@ public class LiquidGlassTabBarHook extends BaseHook
                 capsuleRect.bottom - sw * 0.5f);
             canvas.drawRoundRect(borderInset, capRadius, capRadius, capsuleBorderPaint);
 
-            // 4. Resting matte pill: vanishes cleanly on touch/hold
+            // 4. Resting subtle pill (fades out cleanly as Liquid Glass lens inflates)
             float restAlpha = clamp(1f - inflateProgress * 4.5f, 0f, 1f);
             if (!dropletRect.isEmpty() && restAlpha > 0.01f)
             {
                 float dropR = dropletRect.height() * 0.5f;
                 restPillPaint.setColor(dark
-                    ? Color.argb((int) (175 * restAlpha), 74, 78, 86)
-                    : Color.argb((int) (205 * restAlpha), 214, 219, 228));
+                    ? Color.argb((int) (135 * restAlpha), 74, 78, 86)
+                    : Color.argb((int) (155 * restAlpha), 214, 222, 234));
                 canvas.drawRoundRect(dropletRect, dropR, dropR, restPillPaint);
             }
 
@@ -1036,14 +1241,21 @@ public class LiquidGlassTabBarHook extends BaseHook
 
         private void drawSingleTabItem(Canvas canvas, TabItemInfo info, float cx, float cy, int color, boolean bold)
         {
-            float iconSize = dpf(22f);
-            float iconCy = cy - dpf(7.5f);
+            float iconSize = dpf(22f - 1.5f * collapseProgress);
+            // Smoothly glide icon from upper position down to exact vertical center as labels fade
+            float iconCy = cy - dpf(7.5f) * (1f - collapseProgress);
             drawVectorTabIcon(canvas, info.kind, cx, iconCy, iconSize, color);
 
-            textPaint.setColor(color);
-            textPaint.setFakeBoldText(bold);
-            float textY = cy + dpf(16.5f);
-            canvas.drawText(info.label, cx, textY, textPaint);
+            float labelAlpha = clamp(1f - collapseProgress * 1.65f, 0f, 1f);
+            if (labelAlpha > 0.02f)
+            {
+                int aColor = Color.argb((int) (Color.alpha(color) * labelAlpha),
+                    Color.red(color), Color.green(color), Color.blue(color));
+                textPaint.setColor(aColor);
+                textPaint.setFakeBoldText(bold);
+                float textY = cy + dpf(16.5f) + dpf(4f) * collapseProgress;
+                canvas.drawText(info.label, cx, textY, textPaint);
+            }
 
             if (info.badgeText != null && !info.badgeText.isEmpty())
             {
@@ -1151,24 +1363,52 @@ public class LiquidGlassTabBarHook extends BaseHook
         protected void onDraw(Canvas canvas)
         {
             super.onDraw(canvas);
-            if (capsuleRect.isEmpty() || owner.tabs.isEmpty())
+            if (isCapturingBackdrop || baseCapsuleRect.isEmpty() || owner.tabs.isEmpty())
                 return;
 
+            updateDynamicCapsuleRect();
             boolean dark = owner.isDarkTheme;
             computeDropletRect(dropletRect);
             float dropRadius = dropletRect.height() * 0.5f;
+            float capRadius = capsuleRect.height() * 0.5f;
 
             if (Build.VERSION.SDK_INT >= 33
                 && canvas.isHardwareAccelerated()
+                && rawBackdropNodeObj instanceof RenderNode rawNode
+                && frostedBackdropNodeObj instanceof RenderNode frostNode
                 && unifiedRenderNodeObj instanceof RenderNode node
                 && runtimeShaderObj instanceof RuntimeShader shader
                 && !dropletRect.isEmpty())
             {
-                node.setPosition(0, 0, getWidth(), getHeight());
+                int w = getWidth();
+                int h = getHeight();
+
+                // 1. Capture live Zalo views & wallpaper underneath (sharp)
+                rawNode.setPosition(0, 0, w, h);
+                RecordingCanvas rawRc = rawNode.beginRecording();
+                captureLiveBackdrop(rawRc);
+                rawNode.endRecording();
+
+                // 2. Frosted blur version of live backdrop for inside the TabBar capsule
+                frostNode.setPosition(0, 0, w, h);
+                RecordingCanvas frostRc = frostNode.beginRecording();
+                frostRc.drawRenderNode(rawNode);
+                frostNode.endRecording();
+                frostNode.setRenderEffect(RenderEffect.createBlurEffect(dpf(8f), dpf(8f), Shader.TileMode.CLAMP));
+
+                // 3. Combine sharp backdrop (for protruding lens) + frosted capsule + glass foreground
+                node.setPosition(0, 0, w, h);
                 RecordingCanvas rc = node.beginRecording();
-                drawUnifiedBarContent(rc, dark);
+                rc.drawRenderNode(rawNode);
+                rc.save();
+                rc.clipPath(capsuleClipPath);
+                rc.drawRenderNode(frostNode);
+                rc.restore();
+                drawGlassForeground(rc, dark, true);
                 node.endRecording();
 
+                shader.setFloatUniform("uBarRect", capsuleRect.left, capsuleRect.top, capsuleRect.right, capsuleRect.bottom);
+                shader.setFloatUniform("uBarRadius", capRadius);
                 shader.setFloatUniform("uRect", dropletRect.left, dropletRect.top, dropletRect.right, dropletRect.bottom);
                 shader.setFloatUniform("uRadius", dropRadius);
                 shader.setFloatUniform("uInflate", inflateProgress);
@@ -1180,7 +1420,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             }
             else
             {
-                drawUnifiedBarContent(canvas, dark);
+                drawGlassForeground(canvas, dark, false);
                 if (!dropletRect.isEmpty())
                 {
                     int activeBlue = dark ? 0xFF0A84FF : 0xFF007AFF;
@@ -1208,8 +1448,8 @@ public class LiquidGlassTabBarHook extends BaseHook
                 out.setEmpty();
                 return;
             }
-            float restH = Math.max(capsuleRect.height() - dpf(10f), dpf(44f));
-            float restW = Math.max(currentW - dpf(4f), restH * 1.28f);
+            float restH = Math.max(capsuleRect.height() - dpf(10f), dpf(38f));
+            float restW = Math.max(currentW - dpf(4f), restH * 1.24f);
 
             float inflatedH = capsuleRect.height() + dpf(18.0f);
             float inflatedW = Math.max(currentW * 1.72f, inflatedH * 1.56f);
@@ -1218,7 +1458,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             float w = (restW + (inflatedW - restW) * inflateProgress) * (1f + absStretch * 0.36f);
             float h = (restH + (inflatedH - restH) * inflateProgress) * (1f - absStretch * 0.14f);
 
-            float cx = currentX;
+            float cx = currentX + barOffsetX;
             float cy = capsuleRect.centerY();
             out.set(cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f);
         }
@@ -1238,8 +1478,8 @@ public class LiquidGlassTabBarHook extends BaseHook
             switch (action)
             {
                 case MotionEvent.ACTION_DOWN:
-                    if (x < capsuleRect.left - dpf(6f) || x > capsuleRect.right + dpf(6f)
-                        || y < capsuleRect.top - dpf(8f) || y > capsuleRect.bottom + dpf(8f))
+                    if (x < capsuleRect.left - dpf(8f) || x > capsuleRect.right + dpf(8f)
+                        || y < capsuleRect.top - dpf(10f) || y > capsuleRect.bottom + dpf(10f))
                         return false;
 
                     pointerDown = true;
@@ -1249,6 +1489,16 @@ public class LiquidGlassTabBarHook extends BaseHook
                     lastTouchMs = SystemClock.uptimeMillis();
                     if (getParent() != null)
                         getParent().requestDisallowInterceptTouchEvent(true);
+
+                    if (targetCollapse > 0.5f)
+                        targetCollapse = 0f;
+
+                    touchGlowX = x;
+                    touchGlowY = y;
+                    targetTouchGlow = 1f;
+                    targetBarOffsetX = clamp((x - baseCapsuleRect.centerX()) * 0.022f, -dpf(4.5f), dpf(4.5f));
+                    targetBarOffsetY = clamp((y - baseCapsuleRect.centerY()) * 0.03f, -dpf(2.2f), dpf(2.2f));
+                    targetBarScale = 1.016f;
 
                     int hit = indexForX(x, count);
                     hoveredIndex = hit;
@@ -1268,6 +1518,13 @@ public class LiquidGlassTabBarHook extends BaseHook
                     float instVel = (x - lastTouchX) / dt * 16f;
                     lastTouchX = x;
                     lastTouchMs = now;
+
+                    touchGlowX = clamp(x, capsuleRect.left, capsuleRect.right);
+                    touchGlowY = clamp(y, capsuleRect.top, capsuleRect.bottom);
+                    targetTouchGlow = 1f;
+                    targetBarOffsetX = clamp((x - baseCapsuleRect.centerX()) * 0.026f, -dpf(5.5f), dpf(5.5f));
+                    targetBarOffsetY = clamp((y - baseCapsuleRect.centerY()) * 0.035f, -dpf(2.5f), dpf(2.5f));
+                    targetBarScale = 1.018f;
 
                     float tabW = capsuleRect.width() / count;
                     float minCx = capsuleRect.left + tabW * 0.44f;
@@ -1296,6 +1553,10 @@ public class LiquidGlassTabBarHook extends BaseHook
                     boolean didDrag = isDragging;
                     isDragging = false;
                     targetInflate = 0f;
+                    targetTouchGlow = 0f;
+                    targetBarOffsetX = 0f;
+                    targetBarOffsetY = 0f;
+                    targetBarScale = 1f;
 
                     int finalIdx = didDrag ? clampInt(hoveredIndex, 0, count - 1) : indexForX(x, count);
                     activeIndex = finalIdx;
@@ -1337,45 +1598,61 @@ public class LiquidGlassTabBarHook extends BaseHook
                 return;
             animating = true;
             lastFrameMs = SystemClock.uptimeMillis();
-            postOnAnimation(frameRunnable);
+            postOnAnimation(animTick);
         }
 
-        private final Runnable frameRunnable = new Runnable()
+        private final Runnable animTick = new Runnable()
         {
             @Override
             public void run()
             {
                 long now = SystemClock.uptimeMillis();
-                float dt = clamp((now - lastFrameMs) / 1000f, 0.004f, 0.032f);
+                float dt = clamp((now - lastFrameMs) / 1000f, 0.001f, 0.034f);
                 lastFrameMs = now;
 
-                float stiffness = isDragging ? 460f : 270f;
-                float damping = isDragging ? 28f : 21f;
+                float stiffness = 360f;
+                float damping = 28f;
                 float force = (targetX - currentX) * stiffness;
-                velocityX += (force - velocityX * damping) * dt;
+                velocityX = (velocityX + force * dt) * Math.max(0f, 1f - damping * dt);
                 currentX += velocityX * dt;
 
-                currentW += (targetW - currentW) * Math.min(1f, dt * 16f);
-                inflateProgress += (targetInflate - inflateProgress) * Math.min(1f, dt * 16f);
+                float lerp = 1f - (float) Math.exp(-18f * dt);
+                currentW += (targetW - currentW) * lerp;
+                inflateProgress += (targetInflate - inflateProgress) * (1f - (float) Math.exp(-16f * dt));
+                touchGlowAlpha += (targetTouchGlow - touchGlowAlpha) * (1f - (float) Math.exp(-14f * dt));
+                barOffsetX += (targetBarOffsetX - barOffsetX) * lerp;
+                barOffsetY += (targetBarOffsetY - barOffsetY) * lerp;
+                barScale += (targetBarScale - barScale) * lerp;
+                collapseProgress += (targetCollapse - collapseProgress) * (1f - (float) Math.exp(-12f * dt));
 
-                float velStretchTarget = clamp(velocityX * 0.00018f, -0.22f, 0.22f);
-                stretchX += (velStretchTarget - stretchX) * Math.min(1f, dt * 18f);
+                if (!isDragging)
+                    stretchX += (0f - stretchX) * (1f - (float) Math.exp(-16f * dt));
 
                 invalidate();
 
-                boolean settled = !isDragging
-                    && !pointerDown
-                    && Math.abs(targetX - currentX) < 0.35f
-                    && Math.abs(velocityX) < 1.5f
-                    && Math.abs(targetInflate - inflateProgress) < 0.008f
-                    && Math.abs(stretchX) < 0.005f;
+                boolean done = Math.abs(targetX - currentX) < 0.25f
+                    && Math.abs(velocityX) < 1.2f
+                    && Math.abs(targetW - currentW) < 0.25f
+                    && Math.abs(targetInflate - inflateProgress) < 0.004f
+                    && Math.abs(targetTouchGlow - touchGlowAlpha) < 0.005f
+                    && Math.abs(targetBarOffsetX - barOffsetX) < 0.15f
+                    && Math.abs(targetBarOffsetY - barOffsetY) < 0.15f
+                    && Math.abs(targetBarScale - barScale) < 0.001f
+                    && Math.abs(targetCollapse - collapseProgress) < 0.005f
+                    && Math.abs(stretchX) < 0.004f
+                    && !pointerDown;
 
-                if (settled)
+                if (done)
                 {
                     currentX = targetX;
                     currentW = targetW;
-                    velocityX = 0f;
                     inflateProgress = targetInflate;
+                    touchGlowAlpha = targetTouchGlow;
+                    barOffsetX = targetBarOffsetX;
+                    barOffsetY = targetBarOffsetY;
+                    barScale = targetBarScale;
+                    collapseProgress = targetCollapse;
+                    velocityX = 0f;
                     stretchX = 0f;
                     animating = false;
                     invalidate();
@@ -1396,15 +1673,15 @@ public class LiquidGlassTabBarHook extends BaseHook
         {
             return v * density;
         }
-    }
 
-    private static float clamp(float v, float min, float max)
-    {
-        return Math.max(min, Math.min(max, v));
-    }
+        private static float clamp(float v, float min, float max)
+        {
+            return Math.max(min, Math.min(max, v));
+        }
 
-    private static int clampInt(int v, int min, int max)
-    {
-        return Math.max(min, Math.min(max, v));
+        private static int clampInt(int v, int min, int max)
+        {
+            return Math.max(min, Math.min(max, v));
+        }
     }
 }
