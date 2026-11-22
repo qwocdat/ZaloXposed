@@ -131,6 +131,87 @@ public class LiquidGlassTabBarHook extends BaseHook
             Logger.e(t);
         }
 
+        // Hook MainTabFrameLayout.onMeasure so Zalo's tab content expands all the way to the bottom
+        try
+        {
+            Class<?> mainTabFrameCls = Class.forName("com.zing.zalo.uicontrol.MainTabFrameLayout", false, classLoader);
+            Method onMeasureFrame = null;
+            try { onMeasureFrame = mainTabFrameCls.getDeclaredMethod("onMeasure", int.class, int.class); }
+            catch (NoSuchMethodException ignored) { onMeasureFrame = View.class.getDeclaredMethod("onMeasure", int.class, int.class); }
+            final Class<?> targetFrameCls = mainTabFrameCls;
+            doHook(onMeasureFrame, 10, chain ->
+            {
+                Object self = chain.getThisObject();
+                if (Config.getEnableLiquidGlassTabBar() && targetFrameCls.isInstance(self) && self instanceof ViewGroup frame)
+                {
+                    frame.setClipToPadding(false);
+                    float d = frame.getResources().getDisplayMetrics().density;
+                    int maxReserve = Math.round(120f * d);
+                    if (frame.getPaddingBottom() > 0 && frame.getPaddingBottom() <= maxReserve)
+                        frame.setPadding(frame.getPaddingLeft(), frame.getPaddingTop(), frame.getPaddingRight(), 0);
+                    ViewGroup.LayoutParams lp = frame.getLayoutParams();
+                    if (lp instanceof ViewGroup.MarginLayoutParams mlp && mlp.bottomMargin > 0 && mlp.bottomMargin <= maxReserve)
+                    {
+                        mlp.bottomMargin = 0;
+                        frame.setLayoutParams(lp);
+                    }
+                    if (frame.getParent() instanceof View parentView && parentView.getHeight() > 0)
+                    {
+                        int hSpec = (int) chain.getArg(1);
+                        int mode = View.MeasureSpec.getMode(hSpec);
+                        int size = View.MeasureSpec.getSize(hSpec);
+                        if (mode != View.MeasureSpec.UNSPECIFIED && size < parentView.getHeight())
+                        {
+                            int fullHSpec = View.MeasureSpec.makeMeasureSpec(parentView.getHeight(), View.MeasureSpec.EXACTLY);
+                            return chain.proceed(new Object[] { chain.getArg(0), fullHSpec });
+                        }
+                    }
+                }
+                return chain.proceed();
+            });
+        }
+        catch (Throwable t)
+        {
+            Logger.e(t);
+        }
+
+        // Hook CustomMainTab.onMeasure & setVisibility to keep Zalo's original TabBar at 0px & hidden
+        try
+        {
+            Class<?> customMainTabCls = Class.forName("com.zing.zalo.ui.maintab.widget.CustomMainTab", false, classLoader);
+            try
+            {
+                Method setVis = View.class.getDeclaredMethod("setVisibility", int.class);
+                doHook(setVis, 10, chain ->
+                {
+                    Object self = chain.getThisObject();
+                    if (Config.getEnableLiquidGlassTabBar() && customMainTabCls.isInstance(self))
+                        return chain.proceed(new Object[] { View.GONE });
+                    return chain.proceed();
+                });
+            }
+            catch (Throwable ignored) { }
+
+            try
+            {
+                Method onMeasureTab = customMainTabCls.getDeclaredMethod("onMeasure", int.class, int.class);
+                doHook(onMeasureTab, 10, chain ->
+                {
+                    if (Config.getEnableLiquidGlassTabBar())
+                    {
+                        int zeroSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.EXACTLY);
+                        return chain.proceed(new Object[] { zeroSpec, zeroSpec });
+                    }
+                    return chain.proceed();
+                });
+            }
+            catch (Throwable ignored) { }
+        }
+        catch (Throwable t)
+        {
+            Logger.e(t);
+        }
+
         Class<?> mainTabViewCls = Class.forName("com.zing.zalo.ui.maintab.MainTabView", false, classLoader);
         List<Method> methods = DexKitCache.GetMethods("LiquidGlassTabBar_MainTabView_OnCreateView", () -> bridge.findMethod(FindMethod.create()
             .matcher(MethodMatcher.create()
@@ -290,6 +371,8 @@ public class LiquidGlassTabBarHook extends BaseHook
     {
         int score = 0;
         String clsName = vg.getClass().getName().toLowerCase();
+        if (clsName.contains("custommaintab"))
+            score += 500;
         if (clsName.contains("tab") || clsName.contains("bottom"))
             score += 40;
         if (vg.getId() != View.NO_ID)
