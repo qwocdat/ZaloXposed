@@ -812,14 +812,12 @@ public class LiquidGlassTabBarHook extends BaseHook
             "  float lensCurve = pow(1.0 - u, 3.8);" +
             "  float2 grad = sdGrad(p, halfSize, uRadius);" +
             "  float refractMag = lensCurve * (16.5 * uDensity) * uInflate;" +
-            "  // Convex magnifying refraction (-grad) with 3-channel Cauchy RGB dispersion
-" +
+                        // Convex magnifying refraction (-grad) with 3-channel Cauchy RGB dispersion
             "  float3 cR = sampleGlassColor(fragCoord - grad * (refractMag * 0.65), uDark);" +
             "  float3 cG = sampleGlassColor(fragCoord - grad * (refractMag * 1.00), uDark);" +
             "  float3 cB = sampleGlassColor(fragCoord - grad * (refractMag * 1.42), uDark);" +
             "  float3 rgb = float3(cR.r, cG.g, cB.b);" +
-            "  // Ultra-thin physical Fresnel rim highlight (zero milky plastic fill)
-" +
+                        // Ultra-thin physical Fresnel rim highlight (zero milky plastic fill)
             "  float fresnel = pow(1.0 - u, 4.0) * uInflate;" +
             "  float outerRim = (1.0 - smoothstep(0.0, 1.05 * uDensity, -d)) * uInflate;" +
             "  float ny = p.y / max(halfSize.y, 1.0);" +
