@@ -14,6 +14,11 @@ public final class S
     static
     {
         // Master menu
+        trans.put("botZaloCategoryTitle", new String[] { "Bot Zalo", "Bot Zalo" });
+        trans.put("botZaloCategoryDesc", new String[] { "Turn your account into a bot with one tap, no source or messy files needed", "Biến tài khoản của bạn trở thành bot chỉ với một nút bấm mà không cần source hay file rờm rà" });
+        trans.put("botZaloSubCategoryTitle", new String[] { "Bot Mode (In Development)", "Chế độ Bot (Đang phát triển)" });
+        trans.put("botZaloSwitchTitle", new String[] { "Enable Bot Zalo (In Development)", "Bật Bot Zalo (Đang phát triển)" });
+        trans.put("botZaloSwitchDesc", new String[] { "Turn your account into a bot with one tap, no source or messy files needed (In development)", "Biến tài khoản của bạn trở thành bot chỉ với một nút bấm mà không cần source hay file rờm rà (Đang phát triển)" });
         trans.put("backgroundCategoryTitle", new String[] { "Background", "Hình nền" });
         trans.put("backgroundCategoryDesc", new String[] { "Customize background images", "Tuỳ chỉnh ảnh nền" });
         trans.put("callRingtoneCategoryTitle", new String[] { "Call ringtone", "Nhạc chuông cuộc gọi" });

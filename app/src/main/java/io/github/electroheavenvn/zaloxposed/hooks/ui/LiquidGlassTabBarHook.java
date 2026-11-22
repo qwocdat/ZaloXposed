@@ -528,9 +528,25 @@ public class LiquidGlassTabBarHook extends BaseHook
             }
         }
 
+        private static void collapseViewCompletely(View v)
+        {
+            if (v == null)
+                return;
+            v.setVisibility(View.GONE);
+            v.setAlpha(0f);
+            v.setEnabled(false);
+            v.setClickable(false);
+            ViewGroup.LayoutParams lp = v.getLayoutParams();
+            if (lp != null && lp.height != 0)
+            {
+                lp.height = 0;
+                v.setLayoutParams(lp);
+            }
+        }
+
         private void hideOriginalBar()
         {
-            origTabBar.setVisibility(View.GONE);
+            collapseViewCompletely(origTabBar);
             ViewParent parent = origTabBar.getParent();
             if (parent instanceof ViewGroup parentVg && parentVg != root)
             {
@@ -542,16 +558,17 @@ public class LiquidGlassTabBarHook extends BaseHook
                     if (prev != null && prev.getHeight() > 0 && prev.getHeight() <= Math.round(3f * density))
                     {
                         hiddenDivider = prev;
-                        prev.setVisibility(View.GONE);
+                        collapseViewCompletely(prev);
                     }
                 }
                 if (parentVg.getHeight() > 0 && parentVg.getHeight() <= Math.round(115f * density))
                 {
                     origWrapperBar = parentVg;
                     origWrapperVisibility = parentVg.getVisibility();
-                    parentVg.setVisibility(View.GONE);
+                    collapseViewCompletely(parentVg);
                 }
             }
+            root.requestLayout();
         }
 
         void selectTab(int index)
@@ -625,10 +642,10 @@ public class LiquidGlassTabBarHook extends BaseHook
                 customBar.invalidate();
             }
 
-            if (origTabBar.getVisibility() == View.VISIBLE)
-                origTabBar.setVisibility(View.GONE);
-            if (origWrapperBar != null && origWrapperBar.getVisibility() == View.VISIBLE)
-                origWrapperBar.setVisibility(View.GONE);
+            if (origTabBar.getVisibility() != View.GONE || origTabBar.getHeight() > 0)
+                collapseViewCompletely(origTabBar);
+            if (origWrapperBar != null && (origWrapperBar.getVisibility() != View.GONE || origWrapperBar.getHeight() > 0))
+                collapseViewCompletely(origWrapperBar);
         }
 
         private static TextView findAnyTextView(View v)
@@ -937,11 +954,9 @@ public class LiquidGlassTabBarHook extends BaseHook
         // Physics state
         private int activeIndex = 0;
         private int hoveredIndex = 0;
-        private float currentX = -1f;
-        private float targetX = -1f;
-        private float velocityX = 0f;
-        private float currentW = 0f;
-        private float targetW = 0f;
+        private float currentTabPos = 0.5f;
+        private float targetTabPos = 0.5f;
+        private float velocityTab = 0f;
         private float inflateProgress = 0f;
         private float targetInflate = 0f;
         private float stretchX = 0f;
@@ -1025,12 +1040,9 @@ public class LiquidGlassTabBarHook extends BaseHook
             updateDynamicCapsuleRect();
             if (getWidth() > 0 && !owner.tabs.isEmpty())
             {
-                float tabW = capsuleRect.width() / owner.tabs.size();
-                currentX = capsuleRect.left + tabW * (activeIndex + 0.5f);
-                targetX = currentX;
-                currentW = tabW;
-                targetW = tabW;
-                velocityX = 0f;
+                currentTabPos = activeIndex + 0.5f;
+                targetTabPos = currentTabPos;
+                velocityTab = 0f;
                 inflateProgress = 0f;
                 targetInflate = 0f;
                 stretchX = 0f;
@@ -1443,22 +1455,24 @@ public class LiquidGlassTabBarHook extends BaseHook
 
         private void computeDropletRect(RectF out)
         {
-            if (capsuleRect.isEmpty() || currentW <= 0f)
+            int count = owner.tabs.size();
+            if (capsuleRect.isEmpty() || count == 0)
             {
                 out.setEmpty();
                 return;
             }
-            float restH = Math.max(capsuleRect.height() - dpf(10f), dpf(38f));
-            float restW = Math.max(currentW - dpf(4f), restH * 1.24f);
+            float tabW = capsuleRect.width() / count;
+            float restH = Math.max(capsuleRect.height() - dpf(10f), dpf(36f));
+            float restW = Math.max(tabW - dpf(4f), restH * 1.22f);
 
             float inflatedH = capsuleRect.height() + dpf(18.0f);
-            float inflatedW = Math.max(currentW * 1.72f, inflatedH * 1.56f);
+            float inflatedW = Math.max(tabW * 1.72f, inflatedH * 1.56f);
 
             float absStretch = Math.abs(stretchX);
             float w = (restW + (inflatedW - restW) * inflateProgress) * (1f + absStretch * 0.36f);
             float h = (restH + (inflatedH - restH) * inflateProgress) * (1f - absStretch * 0.14f);
 
-            float cx = currentX + barOffsetX;
+            float cx = capsuleRect.left + currentTabPos * tabW;
             float cy = capsuleRect.centerY();
             out.set(cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f);
         }
@@ -1531,8 +1545,7 @@ public class LiquidGlassTabBarHook extends BaseHook
                     float maxCx = capsuleRect.right - tabW * 0.44f;
                     float clampedX = clamp(x, minCx, maxCx);
 
-                    targetX = clampedX;
-                    targetW = tabW;
+                    targetTabPos = (clampedX - capsuleRect.left) / Math.max(tabW, 1f);
                     targetInflate = 1.0f;
                     stretchX = clamp(instVel * 0.018f, -0.22f, 0.22f);
 
@@ -1580,16 +1593,9 @@ public class LiquidGlassTabBarHook extends BaseHook
         private void updateTargetForIndex(int idx)
         {
             int count = owner.tabs.size();
-            if (count == 0 || capsuleRect.isEmpty())
+            if (count == 0)
                 return;
-            float tabW = capsuleRect.width() / count;
-            targetX = capsuleRect.left + tabW * (idx + 0.5f);
-            targetW = tabW;
-            if (currentX < 0f)
-            {
-                currentX = targetX;
-                currentW = targetW;
-            }
+            targetTabPos = idx + 0.5f;
         }
 
         private void startAnimationLoop()
@@ -1612,12 +1618,11 @@ public class LiquidGlassTabBarHook extends BaseHook
 
                 float stiffness = 360f;
                 float damping = 28f;
-                float force = (targetX - currentX) * stiffness;
-                velocityX = (velocityX + force * dt) * Math.max(0f, 1f - damping * dt);
-                currentX += velocityX * dt;
+                float force = (targetTabPos - currentTabPos) * stiffness;
+                velocityTab = (velocityTab + force * dt) * Math.max(0f, 1f - damping * dt);
+                currentTabPos += velocityTab * dt;
 
                 float lerp = 1f - (float) Math.exp(-18f * dt);
-                currentW += (targetW - currentW) * lerp;
                 inflateProgress += (targetInflate - inflateProgress) * (1f - (float) Math.exp(-16f * dt));
                 touchGlowAlpha += (targetTouchGlow - touchGlowAlpha) * (1f - (float) Math.exp(-14f * dt));
                 barOffsetX += (targetBarOffsetX - barOffsetX) * lerp;
@@ -1630,9 +1635,8 @@ public class LiquidGlassTabBarHook extends BaseHook
 
                 invalidate();
 
-                boolean done = Math.abs(targetX - currentX) < 0.25f
-                    && Math.abs(velocityX) < 1.2f
-                    && Math.abs(targetW - currentW) < 0.25f
+                boolean done = Math.abs(targetTabPos - currentTabPos) < 0.004f
+                    && Math.abs(velocityTab) < 0.02f
                     && Math.abs(targetInflate - inflateProgress) < 0.004f
                     && Math.abs(targetTouchGlow - touchGlowAlpha) < 0.005f
                     && Math.abs(targetBarOffsetX - barOffsetX) < 0.15f
@@ -1644,15 +1648,14 @@ public class LiquidGlassTabBarHook extends BaseHook
 
                 if (done)
                 {
-                    currentX = targetX;
-                    currentW = targetW;
+                    currentTabPos = targetTabPos;
                     inflateProgress = targetInflate;
                     touchGlowAlpha = targetTouchGlow;
                     barOffsetX = targetBarOffsetX;
                     barOffsetY = targetBarOffsetY;
                     barScale = targetBarScale;
                     collapseProgress = targetCollapse;
-                    velocityX = 0f;
+                    velocityTab = 0f;
                     stretchX = 0f;
                     animating = false;
                     invalidate();

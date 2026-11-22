@@ -219,6 +219,9 @@ public final class Config
     }
 
     public static final String KEY_ENABLE_BACKGROUND = "enable_bg";
+    public static final String KEY_ENABLE_BOT_ZALO = "enable_bot_zalo";
+    public static boolean getEnableBotZalo() { return (boolean)get(KEY_ENABLE_BOT_ZALO, false); }
+    public static void setEnableBotZalo(boolean value) { set(KEY_ENABLE_BOT_ZALO, value); }
     public static boolean getEnableBackground() { return (boolean)get(KEY_ENABLE_BACKGROUND, true); }
     public static void setEnableBackground(boolean value) { set(KEY_ENABLE_BACKGROUND, value); }
 
