@@ -28,6 +28,7 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
@@ -380,6 +381,13 @@ public class LiquidGlassTabBarHook extends BaseHook
         private float lastScrollY = 0f;
         private boolean trackingScroll = false;
 
+        private final ViewTreeObserver.OnPreDrawListener preDrawListener = () ->
+        {
+            if (attached && customBar != null && !isCapturingBackdrop)
+                customBar.invalidate();
+            return true;
+        };
+
         private final Runnable syncPoller = new Runnable()
         {
             @Override
@@ -494,6 +502,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             attached = true;
             syncStateFromOriginal();
             customBar.snapImmediately();
+            try { root.getViewTreeObserver().addOnPreDrawListener(preDrawListener); } catch (Throwable ignored) { }
             MAIN_HANDLER.postDelayed(syncPoller, 220);
             return true;
         }
@@ -510,6 +519,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             if (!attached)
                 return;
             attached = false;
+            try { root.getViewTreeObserver().removeOnPreDrawListener(preDrawListener); } catch (Throwable ignored) { }
             MAIN_HANDLER.removeCallbacks(syncPoller);
 
             if (customBar != null && customBar.getParent() instanceof ViewGroup p)
@@ -547,9 +557,9 @@ public class LiquidGlassTabBarHook extends BaseHook
             }
         }
 
-        private void expandContentToBottom(ViewGroup container, int maxReservePx)
+        private void expandContentToBottom(ViewGroup container, int maxReservePx, int depth)
         {
-            if (container == null)
+            if (container == null || depth > 2)
                 return;
             int count = container.getChildCount();
             for (int i = 0; i < count; i++)
@@ -558,7 +568,11 @@ public class LiquidGlassTabBarHook extends BaseHook
                 if (child == customBar || child == origTabBar || child == origWrapperBar || child == hiddenDivider)
                     continue;
                 if (child instanceof ViewGroup vg)
+                {
                     vg.setClipToPadding(false);
+                    if (depth < 2)
+                        expandContentToBottom(vg, maxReservePx, depth + 1);
+                }
                 if (child.getPaddingBottom() > 0 && child.getPaddingBottom() <= maxReservePx)
                     child.setPadding(child.getPaddingLeft(), child.getPaddingTop(), child.getPaddingRight(), 0);
                 ViewGroup.LayoutParams lp = child.getLayoutParams();
@@ -606,9 +620,9 @@ public class LiquidGlassTabBarHook extends BaseHook
                 }
             }
             int maxReserve = Math.round(115f * root.getResources().getDisplayMetrics().density);
-            expandContentToBottom(root, maxReserve);
+            expandContentToBottom(root, maxReserve, 0);
             if (parent instanceof ViewGroup pVg && pVg != root)
-                expandContentToBottom(pVg, maxReserve);
+                expandContentToBottom(pVg, maxReserve, 0);
             root.requestLayout();
         }
 
@@ -688,7 +702,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             if (origWrapperBar != null && (origWrapperBar.getVisibility() != View.GONE || origWrapperBar.getHeight() > 0))
                 collapseViewCompletely(origWrapperBar);
             int maxReserve = Math.round(115f * root.getResources().getDisplayMetrics().density);
-            expandContentToBottom(root, maxReserve);
+            expandContentToBottom(root, maxReserve, 0);
         }
 
         private static TextView findAnyTextView(View v)
@@ -1162,7 +1176,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             {
                 int w = getWidth();
                 int h = getHeight();
-                rc.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
+                rc.drawColor(owner.isDarkTheme ? 0xFF000000 : 0xFFFFFFFF);
 
                 Drawable rootBg = owner.root.getBackground();
                 if (rootBg != null)
@@ -1177,16 +1191,21 @@ public class LiquidGlassTabBarHook extends BaseHook
                 for (int i = 0; i < childCount; i++)
                 {
                     View child = owner.root.getChildAt(i);
-                    if (child == this || child.getVisibility() != View.VISIBLE)
+                    if (child == this || child == owner.origTabBar || child == owner.origWrapperBar || child == owner.hiddenDivider)
                         continue;
-                    int cLeft = child.getLeft();
-                    int cTop = child.getTop();
-                    int cRight = child.getRight();
-                    int cBottom = child.getBottom();
+                    if (child.getVisibility() != View.VISIBLE || child.getAlpha() <= 0.01f)
+                        continue;
+                    float tx = child.getTranslationX();
+                    float ty = child.getTranslationY();
+                    float cLeft = child.getLeft() + tx;
+                    float cTop = child.getTop() + ty;
+                    float cRight = child.getRight() + tx;
+                    float cBottom = child.getBottom() + ty;
                     if (cRight <= getLeft() || cLeft >= getLeft() + w || cBottom <= getTop() || cTop >= getTop() + h)
                         continue;
                     rc.save();
-                    rc.translate(cLeft - getLeft() + child.getTranslationX(), cTop - getTop() + child.getTranslationY());
+                    rc.translate(cLeft - getLeft(), cTop - getTop());
+                    rc.clipRect(0, 0, child.getWidth(), child.getHeight());
                     child.draw(rc);
                     rc.restore();
                 }
