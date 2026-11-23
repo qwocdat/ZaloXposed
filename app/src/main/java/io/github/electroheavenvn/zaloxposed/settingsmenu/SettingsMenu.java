@@ -61,11 +61,11 @@ public final class SettingsMenu
                     CustomBackgroundHook.PickImages(context)),
                 new OptionSettingFeature("clearBackgroundImagesTitle", "clearBackgroundImagesDesc", (item, context) ->
                     CustomBackgroundHook.ClearImages(context)),
-                new TextSettingFeature(() ->
+                new TextLabel(() ->
                 {
                     int count = CustomBackgroundHook.getCustomImageCount();
                     return count == 0 ? S.tr("bgImageCountEmpty") : S.tr("bgImageCount", count);
-                })
+                }, true)
             ))
         )));
         settingItems.add(new SettingCategory("botZaloCategoryTitle", "botZaloCategoryDesc", List.of(
