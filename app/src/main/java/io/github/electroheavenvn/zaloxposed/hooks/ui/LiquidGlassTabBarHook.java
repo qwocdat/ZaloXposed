@@ -368,9 +368,16 @@ public class LiquidGlassTabBarHook extends BaseHook
         private final List<TabItemInfo> tabs = new ArrayList<>();
 
         private int origTabBarVisibility;
+        private int origTabBarHeight = ViewGroup.LayoutParams.WRAP_CONTENT;
+        private int origTabBarMinHeight = 0;
+        private android.graphics.drawable.Drawable origTabBarBg;
         private View hiddenDivider;
+        private int origDividerHeight = ViewGroup.LayoutParams.WRAP_CONTENT;
         private ViewGroup origWrapperBar;
         private int origWrapperVisibility = View.VISIBLE;
+        private int origWrapperHeight = ViewGroup.LayoutParams.WRAP_CONTENT;
+        private int origWrapperMinHeight = 0;
+        private android.graphics.drawable.Drawable origWrapperBg;
         private LiquidGlassTabBarView customBar;
         private boolean attached = false;
         private boolean isDarkTheme = false;
@@ -457,7 +464,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             if (rawTabs.size() < 2)
                 return false;
 
-            isDarkTheme = (root.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+            isDarkTheme = false;
 
             tabs.clear();
             for (int i = 0; i < rawTabs.size(); i++)
@@ -509,7 +516,7 @@ public class LiquidGlassTabBarHook extends BaseHook
 
         void refreshTheme()
         {
-            isDarkTheme = (root.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+            isDarkTheme = false;
             if (customBar != null)
                 customBar.invalidate();
         }
@@ -526,16 +533,38 @@ public class LiquidGlassTabBarHook extends BaseHook
                 p.removeView(customBar);
             customBar = null;
 
-            origTabBar.setVisibility(origTabBarVisibility);
+            restoreViewCompletely(origTabBar, origTabBarVisibility, origTabBarHeight, origTabBarMinHeight, origTabBarBg);
             if (origWrapperBar != null)
             {
-                origWrapperBar.setVisibility(origWrapperVisibility);
+                restoreViewCompletely(origWrapperBar, origWrapperVisibility, origWrapperHeight, origWrapperMinHeight, origWrapperBg);
                 origWrapperBar = null;
             }
             if (hiddenDivider != null)
             {
-                hiddenDivider.setVisibility(View.VISIBLE);
+                restoreViewCompletely(hiddenDivider, View.VISIBLE, origDividerHeight, 0, hiddenDivider.getBackground());
                 hiddenDivider = null;
+            }
+            root.requestLayout();
+        }
+
+        private static void restoreViewCompletely(
+            View v, int vis, int origHeight, int origMinH, android.graphics.drawable.Drawable origBg)
+        {
+            if (v == null)
+                return;
+            v.setVisibility(vis);
+            v.setAlpha(1f);
+            v.setTranslationY(0f);
+            v.setMinimumHeight(origMinH);
+            if (origBg != null)
+                v.setBackground(origBg);
+            v.setEnabled(true);
+            v.setClickable(true);
+            ViewGroup.LayoutParams lp = v.getLayoutParams();
+            if (lp != null && lp.height != origHeight)
+            {
+                lp.height = origHeight;
+                v.setLayoutParams(lp);
             }
         }
 
@@ -612,6 +641,9 @@ public class LiquidGlassTabBarHook extends BaseHook
 
         private void hideOriginalBar()
         {
+            origTabBarHeight = origTabBar.getLayoutParams() != null ? origTabBar.getLayoutParams().height : ViewGroup.LayoutParams.WRAP_CONTENT;
+            origTabBarMinHeight = origTabBar.getMinimumHeight();
+            origTabBarBg = origTabBar.getBackground();
             collapseViewCompletely(origTabBar);
             ViewParent parent = origTabBar.getParent();
             if (parent instanceof ViewGroup parentVg && parentVg != root)
@@ -624,6 +656,7 @@ public class LiquidGlassTabBarHook extends BaseHook
                     if (prev != null && prev.getHeight() > 0 && prev.getHeight() <= Math.round(3f * density))
                     {
                         hiddenDivider = prev;
+                        origDividerHeight = prev.getLayoutParams() != null ? prev.getLayoutParams().height : ViewGroup.LayoutParams.WRAP_CONTENT;
                         collapseViewCompletely(prev);
                     }
                 }
@@ -631,6 +664,9 @@ public class LiquidGlassTabBarHook extends BaseHook
                 {
                     origWrapperBar = parentVg;
                     origWrapperVisibility = parentVg.getVisibility();
+                    origWrapperHeight = parentVg.getLayoutParams() != null ? parentVg.getLayoutParams().height : ViewGroup.LayoutParams.WRAP_CONTENT;
+                    origWrapperMinHeight = parentVg.getMinimumHeight();
+                    origWrapperBg = parentVg.getBackground();
                     collapseViewCompletely(parentVg);
                 }
             }
@@ -1243,10 +1279,10 @@ public class LiquidGlassTabBarHook extends BaseHook
 
             // 1. Crystal-clear translucent glass tint (much more transparent so live backdrop shows through!)
             int topGlass = hasBackdrop
-                ? (dark ? 0x721C1E22 : 0x5EFFFFFF)
+                ? (dark ? 0x721C1E22 : 0x78FFFFFF)
                 : (dark ? 0xEE36383C : 0xECF8FAFE);
             int botGlass = hasBackdrop
-                ? (dark ? 0x62121418 : 0x4CEAF0F8)
+                ? (dark ? 0x62121418 : 0x64F0F4FA)
                 : (dark ? 0xEA24262A : 0xE2EDF2FA);
             capsuleFillPaint.setShadowLayer(dpf(10f), 0f, dpf(3f), dark ? 0x55000000 : 0x16001433);
             capsuleFillPaint.setShader(new LinearGradient(
