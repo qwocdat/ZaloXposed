@@ -37,7 +37,6 @@ import java.util.Set;
 import java.util.WeakHashMap;
 
 import io.github.electroheavenvn.zaloxposed.hooks.BaseHook;
-import io.github.electroheavenvn.zaloxposed.utilities.Config;
 import io.github.electroheavenvn.zaloxposed.utilities.CoreUtilityHelper;
 import io.github.electroheavenvn.zaloxposed.utilities.DexKitCache;
 import io.github.electroheavenvn.zaloxposed.utilities.S;
@@ -203,14 +202,9 @@ public class AmoledThemeHook extends BaseHook
         return amoledColor(ta.getResources(), attrs[index]);
     }
 
-    private static boolean isForcedLiquidDark()
-    {
-        return Config.getEnableLiquidGlassTabBar() && Config.getLiquidGlassTheme() == 1;
-    }
-
     private static boolean isAmoledActive()
     {
-        return isForcedLiquidDark() || (isAmoledEnabled() && isDark());
+        return isAmoledEnabled() && isDark();
     }
 
     private static void ensurePrefs()
@@ -428,30 +422,6 @@ public class AmoledThemeHook extends BaseHook
             )), classLoader);
         if (darkModeMethod == null)
             return;
-        doHook(darkModeMethod, 20, chain ->
-        {
-            if (isForcedLiquidDark())
-                return 1;
-            return chain.proceed();
-        });
-        Config.addOnConfigChangedListener((key, oldValue, newValue) ->
-        {
-            if (Config.KEY_LIQUID_GLASS_THEME.equals(key) || Config.KEY_ENABLE_LIQUID_GLASS_TABBAR.equals(key))
-            {
-                android.content.Context ctx = CoreUtilityHelper.GetAppContext();
-                if (ctx != null)
-                {
-                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
-                    {
-                        try
-                        {
-                            notifyThemeChanged(ctx);
-                        }
-                        catch (Throwable ignored) { }
-                    });
-                }
-            }
-        });
         refreshThemeMethod = DexKitCache.GetMethod("AmoledTheme_RefreshTheme", () -> bridge.findMethod(FindMethod.create()
             .matcher(MethodMatcher.create()
                 .modifiers(Modifier.PUBLIC | Modifier.STATIC)

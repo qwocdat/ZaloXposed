@@ -14,6 +14,7 @@ import io.github.electroheavenvn.zaloxposed.hooks.custommenu.TabMeSettingItemHel
 import io.github.electroheavenvn.zaloxposed.hooks.custommenu.ZButtonHelper;
 import io.github.electroheavenvn.zaloxposed.hooks.functional.ConfigImportExportHook;
 import io.github.electroheavenvn.zaloxposed.hooks.functional.CustomCallRingtoneHook;
+import io.github.electroheavenvn.zaloxposed.hooks.ui.CustomBackgroundHook;
 import io.github.electroheavenvn.zaloxposed.utilities.Config;
 import io.github.electroheavenvn.zaloxposed.utilities.DexKitCache;
 import io.github.electroheavenvn.zaloxposed.utilities.S;
@@ -53,6 +54,20 @@ public final class SettingsMenu
         for (var variant : MicroGVariant.availableVariants)
             selections.add(new ListSelectionSettingFeature.Selection(variant.displayName, variant.id));
 
+        settingItems.add(new SettingCategory("backgroundCategoryTitle", "backgroundCategoryDesc", List.of(
+            new SettingSubCategory("backgroundImagesSubCategoryTitle", List.of(
+                new SwitchSettingFeature("customBackgroundTitle", "", Config.KEY_ENABLE_BACKGROUND),
+                new OptionSettingFeature("addBackgroundImagesTitle", "addBackgroundImagesDesc", (item, context) ->
+                    CustomBackgroundHook.PickImages(context)),
+                new OptionSettingFeature("clearBackgroundImagesTitle", "clearBackgroundImagesDesc", (item, context) ->
+                    CustomBackgroundHook.ClearImages(context)),
+                new TextSettingFeature(() ->
+                {
+                    int count = CustomBackgroundHook.getCustomImageCount();
+                    return count == 0 ? S.tr("bgImageCountEmpty") : S.tr("bgImageCount", count);
+                })
+            ))
+        )));
         settingItems.add(new SettingCategory("botZaloCategoryTitle", "botZaloCategoryDesc", List.of(
             new SettingSubCategory("botZaloSubCategoryTitle", List.of(
                 new SwitchSettingFeature("botZaloSwitchTitle", "botZaloSwitchDesc", Config.KEY_ENABLE_BOT_ZALO)
@@ -129,11 +144,7 @@ public final class SettingsMenu
                 new SwitchSettingFeature("hideNewsfeedTabTitle", "", Config.KEY_HIDE_NEWS_FEED_TAB),
                 new SwitchSettingFeature("showGroupsTabTitle", "", Config.KEY_SHOW_GROUPS_TAB),
                 new SwitchSettingFeature("showMoreTabTitle", "", Config.KEY_SHOW_MORE_TAB),
-                new SwitchSettingFeature("liquidGlassTabBarTitle", "liquidGlassTabBarDesc", Config.KEY_ENABLE_LIQUID_GLASS_TABBAR),
-                new ListSelectionSettingFeature("liquidGlassThemeTitle", "liquidGlassThemeDesc", Config.KEY_LIQUID_GLASS_THEME, List.of(
-                    new ListSelectionSettingFeature.Selection("liquidGlassThemeLight", 0),
-                    new ListSelectionSettingFeature.Selection("liquidGlassThemeDark", 1)
-                ))
+                new SwitchSettingFeature("liquidGlassTabBarTitle", "liquidGlassTabBarDesc", Config.KEY_ENABLE_LIQUID_GLASS_TABBAR)
             ))
         )));
         settingItems.add(new SettingCategory("profileCategoryTitle", "profileCategoryDesc", List.of(

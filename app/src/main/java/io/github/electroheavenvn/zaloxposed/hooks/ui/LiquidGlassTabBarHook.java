@@ -457,7 +457,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             if (rawTabs.size() < 2)
                 return false;
 
-            isDarkTheme = (Config.getLiquidGlassTheme() == 1);
+            isDarkTheme = (root.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
 
             tabs.clear();
             for (int i = 0; i < rawTabs.size(); i++)
@@ -481,10 +481,10 @@ public class LiquidGlassTabBarHook extends BaseHook
 
             float density = root.getResources().getDisplayMetrics().density;
             int sideMargin = Math.round(14f * density);
-            int barHeight = Math.round(62f * density);
+            int barHeight = Math.round(56f * density);
             int overflow = Math.round(28f * density);
             int bottomInset = getNavigationBarBottomInset(root);
-            int bottomMargin = Math.max(bottomInset + Math.round(12f * density), Math.round(18f * density));
+            int bottomMargin = Math.max(bottomInset + Math.round(6f * density), Math.round(10f * density));
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -509,7 +509,7 @@ public class LiquidGlassTabBarHook extends BaseHook
 
         void refreshTheme()
         {
-            isDarkTheme = (Config.getLiquidGlassTheme() == 1);
+            isDarkTheme = (root.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
             if (customBar != null)
                 customBar.invalidate();
         }
@@ -548,6 +548,8 @@ public class LiquidGlassTabBarHook extends BaseHook
             v.setBackground(null);
             v.setEnabled(false);
             v.setClickable(false);
+            v.setMinimumHeight(0);
+            v.setPadding(0, 0, 0, 0);
             v.setTranslationY(10000f);
             ViewGroup.LayoutParams lp = v.getLayoutParams();
             if (lp != null && lp.height != 0)
@@ -963,7 +965,8 @@ public class LiquidGlassTabBarHook extends BaseHook
             "  float2 halfSize = (uRect.zw - uRect.xy) * 0.5;" +
             "  float2 p = fragCoord - center;" +
             "  float d = sdRoundBox(p, halfSize, uRadius);" +
-            "  half4 basePx = evalBarCapsule(fragCoord, barC, barH, dBar);" +
+            "  float barMask = 1.0 - smoothstep(-0.7, 0.7, dBar);" +
+            "  half4 basePx = (dBar > 0.8) ? half4(0.0) : (evalBarCapsule(fragCoord, barC, barH, dBar) * half(barMask));" +
             "  if (d > 0.8) return basePx;" +
             "  float mask = 1.0 - smoothstep(-0.7, 0.7, d);" +
             "  if (uInflate <= 0.015) {" +
@@ -1190,7 +1193,7 @@ public class LiquidGlassTabBarHook extends BaseHook
             {
                 int w = getWidth();
                 int h = getHeight();
-                rc.drawColor(owner.isDarkTheme ? 0xFF000000 : 0xFFFFFFFF);
+                rc.drawColor(owner.isDarkTheme ? 0xFF000000 : 0xFFF4F5F6);
 
                 Drawable rootBg = owner.root.getBackground();
                 if (rootBg != null)
@@ -1506,14 +1509,6 @@ public class LiquidGlassTabBarHook extends BaseHook
                 shader.setFloatUniform("uDensity", density);
                 shader.setFloatUniform("uDark", dark ? 1f : 0f);
                 node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "content"));
-
-                // Subtle bottom fade scrim so bottom edge blends cleanly like iOS 26
-                int fadeCol = dark ? 0xCC000000 : 0xD8FFFFFF;
-                bottomFadePaint.setShader(new LinearGradient(
-                    0f, capsuleRect.centerY(), 0f, h,
-                    Color.TRANSPARENT, fadeCol, Shader.TileMode.CLAMP));
-                canvas.drawRect(0f, capsuleRect.centerY(), w, h, bottomFadePaint);
-                bottomFadePaint.setShader(null);
 
                 canvas.drawRenderNode(node);
             }
